@@ -50,6 +50,9 @@ const (
 	itemEqualSign
 	itemLogicalAnd
 	itemBitwiseAnd
+	itemSpace
+	itemIncludePath
+	itemIncludePathSystem
 )
 
 func (t itemType) String() string {
@@ -98,6 +101,12 @@ func (t itemType) String() string {
 		return "itemLogicalAnd"
 	case itemBitwiseAnd:
 		return "itemBitwiseAnd"
+	case itemSpace:
+		return "itemSpace"
+	case itemIncludePath:
+		return "itemIncludePath"
+	case itemIncludePathSystem:
+		return "itemIncludePathSystem"
 	default:
 		return "itemUnknown"
 	}

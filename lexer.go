@@ -208,8 +208,9 @@ const (
 
 func lexExtern(l *lexer) stateFn {
 	l.pos += Pos(len("extern"))
-	l.acceptRun(" ")
 	l.ignore()
+	l.acceptRun(" ")
+	l.emit(itemSpace)
 	if strings.HasPrefix(l.input[l.pos:], `"C"`) {
 		l.pos += Pos(len(`"C"`))
 		l.emit(itemExternC)
@@ -221,20 +222,21 @@ func lexExtern(l *lexer) stateFn {
 
 func lexInclude(l *lexer) stateFn {
 	l.pos += Pos(len("#include"))
+	l.emit(itemInclude)
 	l.acceptRun(" ")
-	l.ignore()
+	l.emit(itemSpace)
 	switch l.next() {
 	case '"':
 		l.acceptRun(groupLower + groupUpper + groupDigits + "_-/\\.")
 		if l.accept(`"`) {
-			l.emit(itemInclude)
+			l.emit(itemIncludePath)
 			return lexLineStart
 		}
 		return l.errorf("expected closing quotes")
 	case '<':
 		l.acceptRun(groupLower + groupUpper + groupDigits + "_-/\\.")
 		if l.accept(">") {
-			l.emit(itemInclude)
+			l.emit(itemIncludePathSystem)
 			return lexLineStart
 		}
 		return l.errorf("expected closing angle bracket")
@@ -244,8 +246,6 @@ func lexInclude(l *lexer) stateFn {
 }
 
 func lexHexValue(l *lexer) stateFn {
-	l.acceptRun(" ")
-	l.ignore()
 	l.acceptRun("x0123456789abcdefABCDEF")
 	l.accept("u")
 	l.emit(itemHexValue)
@@ -263,40 +263,35 @@ func lexIdentifier(l *lexer) stateFn {
 
 func lexDefine(l *lexer) stateFn {
 	l.pos += Pos(len("#define"))
-	l.acceptRun(" ")
-	l.ignore()
 	l.emit(itemDefine)
 	return lexLineStart
 }
 
+//func lexIfDefined(l *lexer) stateFn {
+//	l.pos += Pos(len("#ifdef"))
+//	l.acceptRun(" ")
+//	l.ignore()
+//	if l.accept("_" + groupUpper + groupLower) {
+//		l.acceptRun("_" + groupUpper + groupLower + groupDigits)
+//		if l.peek() != '\n' {
+//			return l.errorf("expected line break")
+//		}
+//		l.emit(itemIfDefined)
+//		return lexLineStart
+//	}
+//	return l.errorf("expected identifier")
+//}
+
 func lexIfDefined(l *lexer) stateFn {
 	l.pos += Pos(len("#ifdef"))
-	l.acceptRun(" ")
-	l.ignore()
-	if l.accept("_" + groupUpper + groupLower) {
-		l.acceptRun("_" + groupUpper + groupLower + groupDigits)
-		if l.peek() != '\n' {
-			return l.errorf("expected line break")
-		}
-		l.emit(itemIfDefined)
-		return lexLineStart
-	}
-	return l.errorf("expected identifier")
+	l.emit(itemIfDefined)
+	return lexLineStart
 }
 
 func lexIfNotDefined(l *lexer) stateFn {
 	l.pos += Pos(len("#ifndef"))
-	l.acceptRun(" ")
-	l.ignore()
-	if l.accept("_" + groupUpper + groupLower) {
-		l.acceptRun("_" + groupUpper + groupLower + groupDigits)
-		if l.peek() != '\n' {
-			return l.errorf("expected line break")
-		}
-		l.emit(itemIfNotDefined)
-		return lexLineStart
-	}
-	return l.errorf("expected identifier")
+	l.emit(itemIfNotDefined)
+	return lexLineStart
 }
 
 func lexMultilineComment(l *lexer) stateFn {
