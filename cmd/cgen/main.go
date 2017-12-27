@@ -23,6 +23,6 @@ func main() {
 	}
 
 	for i := range cgen.NewParser(filepath.Base(os.Args[1]), b.String()).Parse() {
-		fmt.Println(i)
+		fmt.Printf("%#v\n", i)
 	}
 }

@@ -265,12 +265,8 @@ func lexDefine(l *lexer) stateFn {
 	l.pos += Pos(len("#define"))
 	l.acceptRun(" ")
 	l.ignore()
-	if l.accept("_" + groupUpper + groupLower) {
-		l.acceptRun("_" + groupUpper + groupLower + groupDigits)
-		l.emit(itemDefine)
-		return lexLineStart
-	}
-	return l.errorf("expected identifier")
+	l.emit(itemDefine)
+	return lexLineStart
 }
 
 func lexIfDefined(l *lexer) stateFn {
