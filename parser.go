@@ -143,7 +143,7 @@ func (p *parser) Parse() chan Node {
 							}
 							ic = p.expect(itemIdentifier, "enum")
 							ic1 := p.peekNonSpace()
-							if ic1.typ != itemComma && ic1.typ != itemCloseCurly {
+							if ic1.typ != itemComma && ic1.typ != itemCloseCurly && ic1.typ != itemComment {
 								p.expect(itemEqualSign, "enum")
 								switch p.peekNonSpace().typ {
 								case itemHexValue:
@@ -190,14 +190,14 @@ func (p *parser) Parse() chan Node {
 								default:
 									p.unexpected(p.peekNonSpace(), "enum")
 								}
-								if p.peekNonSpace().typ != itemComma {
-									break
-								}
-								p.nextNonSpace()
+								//if p.peekNonSpace().typ != itemComma {
+								//	break
+								//}
+								//p.nextNonSpace()
 							} else {
-								if p.peekNonSpace().typ != itemComma {
-									p.nextNonSpace()
-								}
+								//if p.peekNonSpace().typ == itemComma {
+								//	p.nextNonSpace()
+								//}
 								ds = append(ds, EnumValue{
 									Name: Ident{
 										NamePos: ic.pos,
@@ -206,6 +206,17 @@ func (p *parser) Parse() chan Node {
 									Value: nil,
 								})
 							}
+							if p.peekNonSpace().typ == itemComment {
+								ic := p.nextNonSpace()
+								c <- Comment{
+									Slash: ic.pos,
+									Text:  ic.val,
+								}
+							}
+							if p.peekNonSpace().typ != itemComma {
+								break
+							}
+							p.nextNonSpace()
 						}
 						p.expect(itemCloseCurly, "typedef")
 						i2 := p.expect(itemIdentifier, "typedef")
