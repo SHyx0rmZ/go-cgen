@@ -1,12 +1,13 @@
 package cgen
 
-import "fmt"
-
-type Pos int
+import (
+	"fmt"
+	"github.com/SHyx0rmZ/cgen/token"
+)
 
 type item struct {
 	typ  itemType
-	pos  Pos
+	pos  token.Pos
 	val  string
 	line int
 }

@@ -1,6 +1,9 @@
 package cgen
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/SHyx0rmZ/cgen/token"
+)
 
 type parser struct {
 	lex       *lexer
@@ -30,14 +33,15 @@ func (p *parser) Parse() chan Node {
 				switch p.peekNonSpace().typ {
 				case itemHexValue:
 					i2 := p.nextNonSpace()
-					c <- DefineStmt{
-						Name: Ident{
+					c <- &DefineDir{
+						DirPos: i.pos,
+						Name: &Ident{
 							NamePos: i1.pos,
 							Name:    i1.val,
 						},
-						Value: BasicLit{
+						Value: &BasicLit{
 							ValuePos: i2.pos,
-							Kind:     Number,
+							Kind:     token.INT,
 							Value:    i2.val,
 						},
 					}
@@ -49,7 +53,8 @@ func (p *parser) Parse() chan Node {
 					p.errorf("expected include path but found %s", p.peekNonSpace().typ)
 				}
 				i1 := p.nextNonSpace()
-				c <- IncludeStmt{
+				c <- &IncludeDir{
+					DirPos:  i.pos,
 					PathPos: i1.pos,
 					Path:    i1.val,
 				}
@@ -58,9 +63,10 @@ func (p *parser) Parse() chan Node {
 					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
 				}
 				i1 := p.nextNonSpace()
-				c <- IfDefinedStmt{
-					Hash: i.pos,
-					Value: Ident{
+				c <- &IfDefDir{
+					DirPos: i.pos,
+					Dir:    i.val,
+					Name: &Ident{
 						NamePos: i1.pos,
 						Name:    i1.val,
 					},
@@ -70,15 +76,16 @@ func (p *parser) Parse() chan Node {
 					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
 				}
 				i1 := p.nextNonSpace()
-				c <- IfNotDefinedStmt{
-					Hash: i.pos,
-					Value: Ident{
+				c <- &IfDefDir{
+					DirPos: i.pos,
+					Dir:    i.val,
+					Name: &Ident{
 						NamePos: i1.pos,
 						Name:    i1.val,
 					},
 				}
 			case itemComment:
-				c <- Comment{
+				c <- &Comment{
 					Slash: i.pos,
 					Text:  i.val,
 				}
@@ -199,7 +206,7 @@ func (p *parser) Parse() chan Node {
 								//	p.nextNonSpace()
 								//}
 								ds = append(ds, EnumValue{
-									Name: Ident{
+									Name: &Ident{
 										NamePos: ic.pos,
 										Name:    ic.val,
 									},
@@ -208,7 +215,7 @@ func (p *parser) Parse() chan Node {
 							}
 							if p.peekNonSpace().typ == itemComment {
 								ic := p.nextNonSpace()
-								c <- Comment{
+								c <- &Comment{
 									Slash: ic.pos,
 									Text:  ic.val,
 								}
@@ -315,115 +322,9 @@ type Error struct {
 
 func (Error) String() string { return "Error" }
 
-type Node interface {
-}
-
-type Expr interface {
-	Node
-	exprNode()
-}
-
-type Stmt interface {
-	Node
-	stmtNode()
-}
-
 type Token int
 
 const (
 	Number Token = iota
 	BitwiseOrOp
 )
-
-type BasicLit struct {
-	ValuePos Pos
-	Kind     Token
-	Value    string
-}
-
-func (BasicLit) exprNode() {}
-
-type Ident struct {
-	NamePos Pos
-	Name    string
-}
-
-func (Ident) exprNode()      {}
-func (StructDecl) exprNode() {}
-
-type DefineStmt struct {
-	Name  Ident
-	Value Expr
-}
-
-type IncludeStmt struct {
-	PathPos Pos
-	Path    string
-}
-
-type Comment struct {
-	Slash Pos
-	Text  string
-}
-
-type IfDefinedStmt struct {
-	Hash  Pos
-	Value Ident
-}
-
-type IfNotDefinedStmt struct {
-	Hash  Pos
-	Value Ident
-}
-
-type TypeDecl struct {
-	Name Ident
-	Expr Expr
-}
-
-type StructDecl struct {
-	Nodes []Expr
-}
-
-type StructType struct {
-	Name Ident
-}
-
-func (StructType) exprNode() {}
-
-type EnumDecl struct {
-	Specs []EnumSpec
-}
-
-func (EnumDecl) exprNode() {}
-
-type EnumSpec interface {
-	Node
-	enumSpecNode()
-}
-
-type EnumValue struct {
-	Name  Ident
-	Value *BasicLit
-}
-
-func (EnumValue) exprNode()     {}
-func (EnumValue) enumSpecNode() {}
-
-type BinaryExpr struct {
-	X     Expr
-	OpPos Pos
-	Op    Token
-	Y     Expr
-}
-
-type EnumConstExpr struct {
-	Name Ident
-	Expr Expr
-}
-
-func (EnumConstExpr) exprNode()     {}
-func (EnumConstExpr) enumSpecNode() {}
-
-func (BinaryExpr) exprNode()      {}
-func (BinaryExpr) enumSpecValue() {} // TODO: revert hack
