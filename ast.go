@@ -58,22 +58,50 @@ type (
 		Kind     token.Token // token.INT
 		Value    string      // literal string
 	}
+
+	UnaryExpr struct {
+		OpPos token.Pos
+		Op    token.Token
+		X     Expr
+	}
+
+	BinaryExpr struct {
+		X     Expr
+		OpPos token.Pos
+		Op    token.Token
+		Y     Expr
+	}
+
+	NestedExpr struct {
+		Opening token.Pos
+		Expr    Expr
+		Closing token.Pos
+	}
 )
 
-func (x *BadExpr) Pos() token.Pos  { return x.From }
-func (x *Ident) Pos() token.Pos    { return x.NamePos }
-func (x *BasicLit) Pos() token.Pos { return x.ValuePos }
+func (x *BadExpr) Pos() token.Pos    { return x.From }
+func (x *Ident) Pos() token.Pos      { return x.NamePos }
+func (x *BasicLit) Pos() token.Pos   { return x.ValuePos }
+func (x *UnaryExpr) Pos() token.Pos  { return x.OpPos }
+func (x *BinaryExpr) Pos() token.Pos { return x.X.Pos() }
+func (x *NestedExpr) Pos() token.Pos { return x.Opening }
 
-func (x *BadExpr) End() token.Pos  { return x.To }
-func (x *Ident) End() token.Pos    { return token.Pos(int(x.NamePos) + len(x.Name)) }
-func (x *BasicLit) End() token.Pos { return token.Pos(int(x.ValuePos) + len(x.Value)) }
+func (x *BadExpr) End() token.Pos    { return x.To }
+func (x *Ident) End() token.Pos      { return token.Pos(int(x.NamePos) + len(x.Name)) }
+func (x *BasicLit) End() token.Pos   { return token.Pos(int(x.ValuePos) + len(x.Value)) }
+func (x *UnaryExpr) End() token.Pos  { return x.X.End() }
+func (x *BinaryExpr) End() token.Pos { return x.Y.End() }
+func (x *NestedExpr) End() token.Pos { return x.Closing }
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
 //
-func (*BadExpr) exprNode()  {}
-func (*Ident) exprNode()    {}
-func (*BasicLit) exprNode() {}
+func (*BadExpr) exprNode()    {}
+func (*Ident) exprNode()      {}
+func (*BasicLit) exprNode()   {}
+func (*UnaryExpr) exprNode()  {}
+func (*BinaryExpr) exprNode() {}
+func (*NestedExpr) exprNode() {}
 
 func (id *Ident) String() string {
 	if id != nil {
@@ -92,6 +120,12 @@ const (
 	NOT_DEFINED
 )
 
+type ArgList struct {
+	Opening token.Pos
+	List    []*Ident
+	Closing token.Pos
+}
+
 type Dir interface {
 	Node
 	dirNode()
@@ -102,16 +136,17 @@ type (
 		From, To token.Pos
 	}
 
-	DefineDir struct {
+	MacroDir struct {
 		DirPos token.Pos
 		Name   *Ident
+		Args   *ArgList
 		Value  Expr //todo
 	}
 
 	IncludeDir struct {
 		DirPos  token.Pos
 		PathPos token.Pos
-		Path    string
+		Path    string // computed #includes are not supported
 	}
 
 	IfDefDir struct {
@@ -119,15 +154,20 @@ type (
 		Cond   IfDefCond
 		Name   *Ident
 	}
+
+	EndIfDir struct {
+		DirPos token.Pos
+	}
 )
 
 func (d *BadDir) Pos() token.Pos     { return d.From }
-func (d *DefineDir) Pos() token.Pos  { return d.Name.Pos() }
+func (d *MacroDir) Pos() token.Pos   { return d.Name.Pos() }
 func (d *IncludeDir) Pos() token.Pos { return d.DirPos }
 func (d *IfDefDir) Pos() token.Pos   { return d.DirPos }
+func (d *EndIfDir) Pos() token.Pos   { return d.DirPos }
 
 func (d *BadDir) End() token.Pos { return d.To }
-func (d *DefineDir) End() token.Pos {
+func (d *MacroDir) End() token.Pos {
 	if d.Value != nil {
 		return d.Value.End()
 	}
@@ -135,11 +175,13 @@ func (d *DefineDir) End() token.Pos {
 }
 func (d *IncludeDir) End() token.Pos { return token.Pos(int(d.PathPos) + len(d.Path)) }
 func (d *IfDefDir) End() token.Pos   { return d.Name.End() }
+func (d *EndIfDir) End() token.Pos   { return d.DirPos + 6 }
 
 func (*BadDir) dirNode()     {}
-func (*DefineDir) dirNode()  {}
+func (*MacroDir) dirNode()   {}
 func (*IncludeDir) dirNode() {}
 func (*IfDefDir) dirNode()   {}
+func (*EndIfDir) dirNode()   {}
 
 // ----------------------------------------------------------------------------
 // Statements
@@ -212,13 +254,6 @@ type EnumValue struct {
 func (EnumValue) exprNode()     {}
 func (EnumValue) enumSpecNode() {}
 
-type BinaryExpr struct {
-	X     Expr
-	OpPos token.Pos
-	Op    Token
-	Y     Expr
-}
-
 type EnumConstExpr struct {
 	Name Ident
 	Expr Expr
@@ -227,5 +262,4 @@ type EnumConstExpr struct {
 func (EnumConstExpr) exprNode()     {}
 func (EnumConstExpr) enumSpecNode() {}
 
-func (BinaryExpr) exprNode()      {}
 func (BinaryExpr) enumSpecValue() {} // TODO: revert hack

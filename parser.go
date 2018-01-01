@@ -2,6 +2,8 @@ package cgen
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/SHyx0rmZ/cgen/token"
 )
 
@@ -30,42 +32,67 @@ func (p *parser) Parse() chan Node {
 		defer close(c)
 		for {
 			i := p.next()
+			//fmt.Printf("%s\n", i.typ)
 			switch i.typ {
 			case itemEOF, itemError:
 				return
+			case itemEndIf:
+				c <- &EndIfDir{
+					DirPos: i.pos,
+				}
 			case itemDefine:
 				if p.peekNonSpace().typ != itemIdentifier {
 					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
 				}
-				i1 := p.nextNonSpace()
-				switch p.peekNonSpace().typ {
-				case itemHexValue:
-					i2 := p.nextNonSpace()
-					c <- &DefineDir{
-						DirPos: i.pos,
-						Name: &Ident{
-							NamePos: i1.pos,
-							Name:    i1.val,
-						},
-						Value: &BasicLit{
-							ValuePos: i2.pos,
-							Kind:     token.INT,
-							Value:    i2.val,
-						},
+				i1 := p.next()
+				//fmt.Printf("def %s %s\n", i1.typ, p.peek().typ)
+				switch p.peek().typ {
+				case itemSpace, itemEOF:
+					if p.peek().val == "" || strings.Contains(p.peek().val, "\n") {
+						//p.next()
+						c <- &MacroDir{
+							DirPos: i.pos,
+							Name: &Ident{
+								NamePos: i1.pos,
+								Name:    i1.val,
+							},
+							Value: nil,
+						}
+						continue
 					}
-				default:
-					i2 := p.peek()
-					for i2.typ != itemEOF && i2.typ != itemError && i2.typ != itemSpace {
-						i1 = p.next()
-						i2 = p.peek()
+					p.next()
+					switch p.peek().typ {
+					case itemHexValue:
+						i2 := p.nextNonSpace()
+						c <- &MacroDir{
+							DirPos: i.pos,
+							Name: &Ident{
+								NamePos: i1.pos,
+								Name:    i1.val,
+							},
+							Value: &BasicLit{
+								ValuePos: i2.pos,
+								Kind:     token.INT,
+								Value:    i2.val,
+							},
+						}
+					default:
+						i2 := p.peek()
+						fmt.Printf("%s\n", i1.typ)
+						fmt.Printf("%s\n", i2.typ)
+						for i2.typ != itemEOF && i2.typ != itemError && i2.typ != itemSpace {
+							i1 = p.next()
+							i2 = p.peek()
+						}
+						p.backup()
+						c <- &BadDir{
+							From: i.pos,
+							To:   token.Pos(int(i1.pos) + len(i1.val)),
+						}
+						//p.errorf("unexpected %s", p.peek().typ)
 					}
-					p.backup()
-					c <- &BadDir{
-						From: i.pos,
-						To:   token.Pos(int(i1.pos) + len(i1.val)),
-					}
-					//p.errorf("unexpected %s", p.peek().typ)
 				}
+				//panic("sad")
 			case itemInclude:
 				if p.peekNonSpace().typ != itemIncludePath && p.peekNonSpace().typ != itemIncludePathSystem {
 					p.errorf("expected include path but found %s", p.peekNonSpace().typ)

@@ -116,7 +116,7 @@ func lexLineStart(l *lexer) stateFn {
 		return lexMultilineComment
 	case l.peek() == '\n':
 		l.next()
-		l.ignore()
+		l.emit(itemSpace)
 		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#ifndef"):
 		return lexIfNotDefined
