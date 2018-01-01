@@ -292,6 +292,23 @@ func (p *parser) Parse() chan Node {
 					}
 				}
 				fallthrough
+			case itemHexValue:
+				c <- &BasicLit{
+					ValuePos: i.pos,
+					Kind:     token.INT,
+					Value:    i.val,
+				}
+			case itemMinus:
+				i1 := p.expect(itemHexValue, "unary expression")
+				c <- &UnaryExpr{
+					OpPos: i.pos,
+					Op:    token.SUB,
+					X: &BasicLit{
+						ValuePos: i1.pos,
+						Kind:     token.INT,
+						Value:    i1.val,
+					},
+				}
 			default:
 				fmt.Printf("%s\n", i)
 			}

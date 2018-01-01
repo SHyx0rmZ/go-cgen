@@ -54,6 +54,8 @@ const (
 	itemSpace
 	itemIncludePath
 	itemIncludePathSystem
+	itemDecrement
+	itemMinus
 )
 
 func (t itemType) String() string {
@@ -108,6 +110,10 @@ func (t itemType) String() string {
 		return "itemIncludePath"
 	case itemIncludePathSystem:
 		return "itemIncludePathSystem"
+	case itemMinus:
+		return "itemMinus"
+	case itemDecrement:
+		return "itemDecrement"
 	default:
 		return "itemUnknown"
 	}

@@ -171,6 +171,30 @@ func TestParser_ParsePreprocessorDirectives(t *testing.T) {
 		// #endif
 		// extern "C" {
 		// #define (SD)
+		{
+			"1",
+			[]Node{
+				&BasicLit{
+					ValuePos: 0,
+					Kind:     token.INT,
+					Value:    "1",
+				},
+			},
+		},
+		{
+			"-1",
+			[]Node{
+				&UnaryExpr{
+					OpPos: 0,
+					Op:    token.SUB,
+					X: &BasicLit{
+						ValuePos: 1,
+						Kind:     token.INT,
+						Value:    "1",
+					},
+				},
+			},
+		},
 	}
 
 	for i, test := range tests {

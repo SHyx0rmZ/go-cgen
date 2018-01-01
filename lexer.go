@@ -190,6 +190,14 @@ func lexLineStart(l *lexer) stateFn {
 		}
 		l.emit(itemBitwiseAnd)
 		return lexLineStart
+	case l.peek() == '-':
+		l.next()
+		if l.accept("-") {
+			l.emit(itemDecrement)
+			return lexLineStart
+		}
+		l.emit(itemMinus)
+		return lexLineStart
 	default:
 		if l.accept("_" + groupLower + groupUpper) {
 			return lexIdentifier
