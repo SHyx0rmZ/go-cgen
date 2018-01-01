@@ -72,7 +72,7 @@ type (
 		Y     Expr
 	}
 
-	NestedExpr struct {
+	ParenExpr struct {
 		Opening token.Pos
 		Expr    Expr
 		Closing token.Pos
@@ -84,14 +84,14 @@ func (x *Ident) Pos() token.Pos      { return x.NamePos }
 func (x *BasicLit) Pos() token.Pos   { return x.ValuePos }
 func (x *UnaryExpr) Pos() token.Pos  { return x.OpPos }
 func (x *BinaryExpr) Pos() token.Pos { return x.X.Pos() }
-func (x *NestedExpr) Pos() token.Pos { return x.Opening }
+func (x *ParenExpr) Pos() token.Pos  { return x.Opening }
 
 func (x *BadExpr) End() token.Pos    { return x.To }
 func (x *Ident) End() token.Pos      { return token.Pos(int(x.NamePos) + len(x.Name)) }
 func (x *BasicLit) End() token.Pos   { return token.Pos(int(x.ValuePos) + len(x.Value)) }
 func (x *UnaryExpr) End() token.Pos  { return x.X.End() }
 func (x *BinaryExpr) End() token.Pos { return x.Y.End() }
-func (x *NestedExpr) End() token.Pos { return x.Closing }
+func (x *ParenExpr) End() token.Pos  { return x.Closing }
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
@@ -101,7 +101,7 @@ func (*Ident) exprNode()      {}
 func (*BasicLit) exprNode()   {}
 func (*UnaryExpr) exprNode()  {}
 func (*BinaryExpr) exprNode() {}
-func (*NestedExpr) exprNode() {}
+func (*ParenExpr) exprNode()  {}
 
 func (id *Ident) String() string {
 	if id != nil {

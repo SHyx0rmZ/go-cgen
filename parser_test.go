@@ -113,7 +113,7 @@ func TestParser_ParsePreprocessorDirectives(t *testing.T) {
 						Name:    "VALUE",
 					},
 					Value: &BinaryExpr{
-						X: &NestedExpr{
+						X: &ParenExpr{
 							Opening: 0,
 							Expr: &Ident{
 								NamePos: 0,
