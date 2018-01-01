@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/SHyx0rmZ/cgen/token"
 )
 
 const eof = -1
@@ -14,10 +16,10 @@ type lexer struct {
 	name    string
 	input   string
 	state   stateFn
-	pos     Pos
-	start   Pos
-	width   Pos
-	lastPos Pos
+	pos     token.Pos
+	start   token.Pos
+	width   token.Pos
+	lastPos token.Pos
 	items   chan item
 	line    int
 }
@@ -39,7 +41,7 @@ func (l *lexer) next() rune {
 		return eof
 	}
 	r, w := utf8.DecodeRuneInString(l.input[l.pos:])
-	l.width = Pos(w)
+	l.width = token.Pos(w)
 	l.pos += l.width
 	if r == '\n' {
 		l.line++
@@ -127,7 +129,7 @@ func lexLineStart(l *lexer) stateFn {
 	case strings.HasPrefix(l.input[l.pos:], "extern"):
 		return lexExtern
 	case strings.HasPrefix(l.input[l.pos:], "#endif"):
-		l.pos += Pos(len("#endif"))
+		l.pos += token.Pos(len("#endif"))
 		l.emit(itemEndIf)
 		return lexLineStart
 	case l.accept(groupDigits):
@@ -150,7 +152,7 @@ func lexLineStart(l *lexer) stateFn {
 		return lexLineStart
 	case l.peek() == ' ':
 		l.acceptRun(" ")
-		l.ignore()
+		l.emit(itemSpace)
 		return lexLineStart
 	case l.peek() == '\\':
 		l.next()
@@ -207,12 +209,12 @@ const (
 )
 
 func lexExtern(l *lexer) stateFn {
-	l.pos += Pos(len("extern"))
+	l.pos += token.Pos(len("extern"))
 	l.ignore()
 	l.acceptRun(" ")
 	l.emit(itemSpace)
 	if strings.HasPrefix(l.input[l.pos:], `"C"`) {
-		l.pos += Pos(len(`"C"`))
+		l.pos += token.Pos(len(`"C"`))
 		l.emit(itemExternC)
 		//return lexLineStart
 	}
@@ -221,7 +223,7 @@ func lexExtern(l *lexer) stateFn {
 }
 
 func lexInclude(l *lexer) stateFn {
-	l.pos += Pos(len("#include"))
+	l.pos += token.Pos(len("#include"))
 	l.emit(itemInclude)
 	l.acceptRun(" ")
 	l.emit(itemSpace)
@@ -262,7 +264,7 @@ func lexIdentifier(l *lexer) stateFn {
 }
 
 func lexDefine(l *lexer) stateFn {
-	l.pos += Pos(len("#define"))
+	l.pos += token.Pos(len("#define"))
 	l.emit(itemDefine)
 	return lexLineStart
 }
@@ -283,13 +285,13 @@ func lexDefine(l *lexer) stateFn {
 //}
 
 func lexIfDefined(l *lexer) stateFn {
-	l.pos += Pos(len("#ifdef"))
+	l.pos += token.Pos(len("#ifdef"))
 	l.emit(itemIfDefined)
 	return lexLineStart
 }
 
 func lexIfNotDefined(l *lexer) stateFn {
-	l.pos += Pos(len("#ifndef"))
+	l.pos += token.Pos(len("#ifndef"))
 	l.emit(itemIfNotDefined)
 	return lexLineStart
 }

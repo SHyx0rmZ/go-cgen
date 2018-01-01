@@ -85,12 +85,23 @@ func (id *Ident) String() string {
 // ----------------------------------------------------------------------------
 // Pre-processor directives
 
+type IfDefCond int
+
+const (
+	DEFINED IfDefCond = iota
+	NOT_DEFINED
+)
+
 type Dir interface {
 	Node
 	dirNode()
 }
 
 type (
+	BadDir struct {
+		From, To token.Pos
+	}
+
 	DefineDir struct {
 		DirPos token.Pos
 		Name   *Ident
@@ -105,15 +116,17 @@ type (
 
 	IfDefDir struct {
 		DirPos token.Pos
-		Dir    string
+		Cond   IfDefCond
 		Name   *Ident
 	}
 )
 
+func (d *BadDir) Pos() token.Pos     { return d.From }
 func (d *DefineDir) Pos() token.Pos  { return d.Name.Pos() }
 func (d *IncludeDir) Pos() token.Pos { return d.DirPos }
 func (d *IfDefDir) Pos() token.Pos   { return d.DirPos }
 
+func (d *BadDir) End() token.Pos { return d.To }
 func (d *DefineDir) End() token.Pos {
 	if d.Value != nil {
 		return d.Value.End()
@@ -122,6 +135,11 @@ func (d *DefineDir) End() token.Pos {
 }
 func (d *IncludeDir) End() token.Pos { return token.Pos(int(d.PathPos) + len(d.Path)) }
 func (d *IfDefDir) End() token.Pos   { return d.Name.End() }
+
+func (*BadDir) dirNode()     {}
+func (*DefineDir) dirNode()  {}
+func (*IncludeDir) dirNode() {}
+func (*IfDefDir) dirNode()   {}
 
 // ----------------------------------------------------------------------------
 // Statements
@@ -139,32 +157,31 @@ type (
 	}
 )
 
+func (s *BadStmt) Pos() token.Pos { return s.From }
+
+func (s *BadStmt) End() token.Pos { return s.To }
+
+func (*BadStmt) stmtNode() {}
+
+// ----------------------------------------------------------------------------
+// Declarations
+
+type (
+	TypeDecl struct {
+		KeyPos token.Pos
+		Decl   *Decl
+		Name   *Ident
+	}
+)
+
+func (d *TypeDecl) Pos() token.Pos { return d.KeyPos }
+
+func (d *TypeDecl) End() token.Pos { return d.Name.End() }
+
+func (*TypeDecl) declNode() {}
+
+// ----------------------------------------------------------------------------
 func (StructDecl) exprNode() {}
-
-type DefineStmt struct {
-	Name  Ident
-	Value Expr
-}
-
-type IncludeStmt struct {
-	PathPos Pos
-	Path    string
-}
-
-type IfDefinedStmt struct {
-	Hash  Pos
-	Value Ident
-}
-
-type IfNotDefinedStmt struct {
-	Hash  Pos
-	Value Ident
-}
-
-type TypeDecl struct {
-	Name Ident
-	Expr Expr
-}
 
 type StructDecl struct {
 	Nodes []Expr
@@ -197,7 +214,7 @@ func (EnumValue) enumSpecNode() {}
 
 type BinaryExpr struct {
 	X     Expr
-	OpPos Pos
+	OpPos token.Pos
 	Op    Token
 	Y     Expr
 }

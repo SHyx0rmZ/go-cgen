@@ -16,6 +16,14 @@ func NewParser(name, input string) *parser {
 	return &parser{lex: NewLexer(name, input), name: name}
 }
 
+func (p *parser) Nodes() []Node {
+	var nodes []Node
+	for node := range p.Parse() {
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
 func (p *parser) Parse() chan Node {
 	c := make(chan Node)
 	go func() {
@@ -46,6 +54,16 @@ func (p *parser) Parse() chan Node {
 						},
 					}
 				default:
+					i2 := p.peek()
+					for i2.typ != itemEOF && i2.typ != itemError && i2.typ != itemSpace {
+						i1 = p.next()
+						i2 = p.peek()
+					}
+					p.backup()
+					c <- &BadDir{
+						From: i.pos,
+						To:   token.Pos(int(i1.pos) + len(i1.val)),
+					}
 					//p.errorf("unexpected %s", p.peek().typ)
 				}
 			case itemInclude:
@@ -65,7 +83,7 @@ func (p *parser) Parse() chan Node {
 				i1 := p.nextNonSpace()
 				c <- &IfDefDir{
 					DirPos: i.pos,
-					Dir:    i.val,
+					Cond:   DEFINED,
 					Name: &Ident{
 						NamePos: i1.pos,
 						Name:    i1.val,
@@ -78,7 +96,7 @@ func (p *parser) Parse() chan Node {
 				i1 := p.nextNonSpace()
 				c <- &IfDefDir{
 					DirPos: i.pos,
-					Dir:    i.val,
+					Cond:   NOT_DEFINED,
 					Name: &Ident{
 						NamePos: i1.pos,
 						Name:    i1.val,
@@ -96,148 +114,154 @@ func (p *parser) Parse() chan Node {
 					case i1.typ == itemIdentifier && i1.val == "struct":
 						p.nextNonSpace()
 						switch p.peekNonSpace().typ {
-						case itemOpenCurly:
-							var ns []Expr
-							for {
-								ic := p.nextNonSpace()
-								if ic.typ == itemCloseCurly {
-									break
+						/*
+							case itemOpenCurly:
+								var ns []Expr
+								for {
+									ic := p.nextNonSpace()
+									if ic.typ == itemCloseCurly {
+										break
+									}
 								}
-							}
-							i2 := p.expect(itemIdentifier, "typedef")
-							p.expect(itemSemicolon, "typedef")
-							c <- TypeDecl{
-								Name: Ident{
-									NamePos: i2.pos,
-									Name:    i2.val,
-								},
-								Expr: StructDecl{
-									Nodes: ns,
-								},
-							}
-						case itemIdentifier:
-							i2 := p.nextNonSpace()
-							i3 := p.expect(itemIdentifier, "typedef")
-							p.expect(itemSemicolon, "typedef")
-							c <- TypeDecl{
-								Name: Ident{
-									NamePos: i3.pos,
-									Name:    i3.val,
-								},
-								Expr: StructType{
+								i2 := p.expect(itemIdentifier, "typedef")
+								p.expect(itemSemicolon, "typedef")
+								c <- &TypeDecl{
 									Name: Ident{
 										NamePos: i2.pos,
 										Name:    i2.val,
 									},
-								},
-							}
+									Expr: StructDecl{
+										Nodes: ns,
+									},
+								}
+						*/
+						/*
+							case itemIdentifier:
+								i2 := p.nextNonSpace()
+								i3 := p.expect(itemIdentifier, "typedef")
+								p.expect(itemSemicolon, "typedef")
+								c <- TypeDecl{
+									Name: Ident{
+										NamePos: i3.pos,
+										Name:    i3.val,
+									},
+									Expr: StructType{
+										Name: Ident{
+											NamePos: i2.pos,
+											Name:    i2.val,
+										},
+									},
+								}
+						*/
 						default:
 							p.unexpected(p.peekNonSpace(), "typedef")
 						}
 						continue
-					case i1.typ == itemIdentifier && i1.val == "enum":
-						p.nextNonSpace()
-						p.expect(itemOpenCurly, "typedef")
-						var ds []EnumSpec
-						for {
-							ic := p.peekNonSpace()
-							if ic.typ == itemCloseCurly {
-								break
-							}
-							if ic.typ == itemComment {
+						/*
+							case i1.typ == itemIdentifier && i1.val == "enum":
 								p.nextNonSpace()
-								continue
-							}
-							ic = p.expect(itemIdentifier, "enum")
-							ic1 := p.peekNonSpace()
-							if ic1.typ != itemComma && ic1.typ != itemCloseCurly && ic1.typ != itemComment {
-								p.expect(itemEqualSign, "enum")
-								switch p.peekNonSpace().typ {
-								case itemHexValue:
-									ic3 := p.expect(itemHexValue, "enum")
-									if p.peekNonSpace().typ == itemComment {
-										p.nextNonSpace()
+								p.expect(itemOpenCurly, "typedef")
+								var ds []EnumSpec
+								for {
+									ic := p.peekNonSpace()
+									if ic.typ == itemCloseCurly {
+										break
 									}
-									ds = append(ds, EnumValue{
-										Name: Ident{
-											NamePos: ic.pos,
-											Name:    ic.val,
-										},
-										Value: &BasicLit{
-											ValuePos: ic3.pos,
-											Kind:     Number,
-											Value:    ic3.val,
-										},
-									})
-								case itemOpenParen:
-									p.expect(itemOpenParen, "enum hack")
-									ic3 := p.expect(itemIdentifier, "enum hack")
-									ic4 := p.expect(itemBitwiseOr, "enum hack")
-									ic5 := p.expect(itemHexValue, "enum hack")
-									p.expect(itemCloseParen, "enum hack")
-									ds = append(ds, EnumConstExpr{
-										Name: Ident{
-											NamePos: ic.pos,
-											Name:    ic.val,
-										},
-										Expr: BinaryExpr{
-											X: Ident{
-												NamePos: ic3.pos,
-												Name:    ic3.val,
+									if ic.typ == itemComment {
+										p.nextNonSpace()
+										continue
+									}
+									ic = p.expect(itemIdentifier, "enum")
+									ic1 := p.peekNonSpace()
+									if ic1.typ != itemComma && ic1.typ != itemCloseCurly && ic1.typ != itemComment {
+										p.expect(itemEqualSign, "enum")
+										switch p.peekNonSpace().typ {
+										case itemHexValue:
+											ic3 := p.expect(itemHexValue, "enum")
+											if p.peekNonSpace().typ == itemComment {
+												p.nextNonSpace()
+											}
+											ds = append(ds, EnumValue{
+												Name: Ident{
+													NamePos: ic.pos,
+													Name:    ic.val,
+												},
+												Value: &BasicLit{
+													ValuePos: ic3.pos,
+													Kind:     Number,
+													Value:    ic3.val,
+												},
+											})
+										case itemOpenParen:
+											p.expect(itemOpenParen, "enum hack")
+											ic3 := p.expect(itemIdentifier, "enum hack")
+											ic4 := p.expect(itemBitwiseOr, "enum hack")
+											ic5 := p.expect(itemHexValue, "enum hack")
+											p.expect(itemCloseParen, "enum hack")
+											ds = append(ds, EnumConstExpr{
+												Name: Ident{
+													NamePos: ic.pos,
+													Name:    ic.val,
+												},
+												Expr: BinaryExpr{
+													X: Ident{
+														NamePos: ic3.pos,
+														Name:    ic3.val,
+													},
+													OpPos: ic4.pos,
+													Op:    BitwiseOrOp,
+													Y: BasicLit{
+														ValuePos: ic5.pos,
+														Kind:     Number,
+														Value:    ic5.val,
+													},
+												},
+											})
+										default:
+											p.unexpected(p.peekNonSpace(), "enum")
+										}
+										//if p.peekNonSpace().typ != itemComma {
+										//	break
+										//}
+										//p.nextNonSpace()
+									} else {
+										//if p.peekNonSpace().typ == itemComma {
+										//	p.nextNonSpace()
+										//}
+										ds = append(ds, EnumValue{
+											Name: &Ident{
+												NamePos: ic.pos,
+												Name:    ic.val,
 											},
-											OpPos: ic4.pos,
-											Op:    BitwiseOrOp,
-											Y: BasicLit{
-												ValuePos: ic5.pos,
-												Kind:     Number,
-												Value:    ic5.val,
-											},
-										},
-									})
-								default:
-									p.unexpected(p.peekNonSpace(), "enum")
+											Value: nil,
+										})
+									}
+									if p.peekNonSpace().typ == itemComment {
+										ic := p.nextNonSpace()
+										c <- &Comment{
+											Slash: ic.pos,
+											Text:  ic.val,
+										}
+									}
+									if p.peekNonSpace().typ != itemComma {
+										break
+									}
+									p.nextNonSpace()
 								}
-								//if p.peekNonSpace().typ != itemComma {
-								//	break
-								//}
-								//p.nextNonSpace()
-							} else {
-								//if p.peekNonSpace().typ == itemComma {
-								//	p.nextNonSpace()
-								//}
-								ds = append(ds, EnumValue{
-									Name: &Ident{
-										NamePos: ic.pos,
-										Name:    ic.val,
+								p.expect(itemCloseCurly, "typedef")
+								i2 := p.expect(itemIdentifier, "typedef")
+								p.expect(itemSemicolon, "typedef")
+								c <- TypeDecl{
+									Name: Ident{
+										NamePos: i2.pos,
+										Name:    i2.val,
 									},
-									Value: nil,
-								})
-							}
-							if p.peekNonSpace().typ == itemComment {
-								ic := p.nextNonSpace()
-								c <- &Comment{
-									Slash: ic.pos,
-									Text:  ic.val,
+									Expr: EnumDecl{
+										Specs: ds,
+									},
 								}
-							}
-							if p.peekNonSpace().typ != itemComma {
-								break
-							}
-							p.nextNonSpace()
-						}
-						p.expect(itemCloseCurly, "typedef")
-						i2 := p.expect(itemIdentifier, "typedef")
-						p.expect(itemSemicolon, "typedef")
-						c <- TypeDecl{
-							Name: Ident{
-								NamePos: i2.pos,
-								Name:    i2.val,
-							},
-							Expr: EnumDecl{
-								Specs: ds,
-							},
-						}
-						continue
+								continue
+						*/
 					}
 				}
 				fallthrough
