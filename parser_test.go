@@ -86,18 +86,18 @@ func TestParser_Parse(t *testing.T) {
 					},
 					Value: &BinaryExpr{
 						X: &UnaryExpr{
-							OpPos: 0,
+							OpPos: 17,
 							Op:    token.SUB,
 							X: &BasicLit{
-								ValuePos: 0,
+								ValuePos: 18,
 								Kind:     token.INT,
 								Value:    "1",
 							},
 						},
-						OpPos: 0,
+						OpPos: 20,
 						Op:    token.QUO,
 						Y: &Ident{
-							NamePos: 0,
+							NamePos: 22,
 							Name:    "X",
 						},
 					},

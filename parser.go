@@ -255,19 +255,11 @@ func (p *parser) Parse() chan Node {
 					Value:    i.val,
 				}
 			case itemMinus:
-				i1 := p.expect(itemHexValue, "unary expression")
-				c <- &UnaryExpr{
-					OpPos: i.pos,
-					Op:    token.SUB,
-					X: &BasicLit{
-						ValuePos: i1.pos,
-						Kind:     token.INT,
-						Value:    i1.val,
-					},
-				}
-			case itemOpenParen:
 				p.backup()
-				c <- p.parseParenExpr()
+				c <- p.parseUnaryExpr()
+			//case itemOpenParen:
+			//	p.backup()
+			//	c <- p.parseParenExpr()
 			default:
 			}
 		}
@@ -326,7 +318,7 @@ func (p *parser) parsePrimaryExpr() Expr {
 }
 
 func (p *parser) parseUnaryExpr() Expr {
-	switch p.peek().typ {
+	switch p.peekNonSpace().typ {
 	case itemHexValue:
 		number := p.next()
 		return &BasicLit{
@@ -340,18 +332,59 @@ func (p *parser) parseUnaryExpr() Expr {
 			NamePos: identifier.pos,
 			Name:    identifier.val,
 		}
+	case itemMinus:
+		operator := p.next()
+		expr := p.parseUnaryExpr()
+		return &UnaryExpr{
+			OpPos: operator.pos,
+			Op:    token.SUB,
+			X:     expr,
+		}
+	case itemOpenParen:
+		opening := p.next()
+		expr := p.parseExpr()
+		closing := p.expect(itemCloseParen, "parentheses expression")
+		return &ParenExpr{
+			Opening: opening.pos,
+			Expr:    expr,
+			Closing: closing.pos,
+		}
 	}
 
 	return p.parsePrimaryExpr()
 }
 
-func (p *parser) parseBinaryExpr() Expr {
+func (p *parser) tokPrec() (item, token.Token, int) {
+	tok := p.nextNonSpace()
+	switch tok.typ {
+	case itemMinus:
+		return tok, token.SUB, 4
+	case itemSlash:
+		return tok, token.QUO, 5
+	}
+	p.backup()
+	return tok, token.ILLEGAL_TOKEN, 0
+}
+
+func (p *parser) parseBinaryExpr(prec1 int) Expr {
 	x := p.parseUnaryExpr()
-	return x
+	for {
+		op, tok, oprec := p.tokPrec()
+		if oprec < prec1 {
+			return x
+		}
+		y := p.parseBinaryExpr(oprec + 1)
+		x = &BinaryExpr{
+			X:     x,
+			OpPos: op.pos,
+			Op:    tok,
+			Y:     y,
+		}
+	}
 }
 
 func (p *parser) parseExpr() Expr {
-	return p.parseBinaryExpr()
+	return p.parseBinaryExpr(1)
 }
 
 func (p *parser) parseArgList() *ArgList {

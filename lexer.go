@@ -198,6 +198,10 @@ func lexLineStart(l *lexer) stateFn {
 		}
 		l.emit(itemMinus)
 		return lexLineStart
+	case l.peek() == '/':
+		l.next()
+		l.emit(itemSlash)
+		return lexLineStart
 	default:
 		if l.accept("_" + groupLower + groupUpper) {
 			return lexIdentifier
