@@ -6,21 +6,22 @@ import (
 	"testing"
 
 	"bytes"
+	"github.com/SHyx0rmZ/cgen/ast"
 	"github.com/SHyx0rmZ/cgen/token"
-	"go/ast"
+	goast "go/ast"
 )
 
 func TestParser_Parse(t *testing.T) {
 	tests := []struct {
 		Input string
-		Value []Node
+		Value []ast.Node
 	}{
 		{
 			"#define VALUE",
-			[]Node{
-				&MacroDir{
+			[]ast.Node{
+				&ast.MacroDir{
 					DirPos: 0,
-					Name: &Ident{
+					Name: &ast.Ident{
 						NamePos: 8,
 						Name:    "VALUE",
 					},
@@ -31,14 +32,14 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			"#define VALUE()",
-			[]Node{
-				&MacroDir{
+			[]ast.Node{
+				&ast.MacroDir{
 					DirPos: 0,
-					Name: &Ident{
+					Name: &ast.Ident{
 						NamePos: 8,
 						Name:    "VALUE",
 					},
-					Args: &ArgList{
+					Args: &ast.ArgList{
 						Opening: 13,
 						List:    nil,
 						Closing: 14,
@@ -49,15 +50,15 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			"#define VALUE 1",
-			[]Node{
-				&MacroDir{
+			[]ast.Node{
+				&ast.MacroDir{
 					DirPos: 0,
-					Name: &Ident{
+					Name: &ast.Ident{
 						NamePos: 8,
 						Name:    "VALUE",
 					},
 					Args: nil,
-					Value: &BasicLit{
+					Value: &ast.BasicLit{
 						ValuePos: 14,
 						Kind:     token.INT,
 						Value:    "1",
@@ -67,16 +68,16 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			"#define VALUE(X) -1 / X",
-			[]Node{
-				&MacroDir{
+			[]ast.Node{
+				&ast.MacroDir{
 					DirPos: 0,
-					Name: &Ident{
+					Name: &ast.Ident{
 						NamePos: 8,
 						Name:    "VALUE",
 					},
-					Args: &ArgList{
+					Args: &ast.ArgList{
 						Opening: 13,
-						List: []*Ident{
+						List: []*ast.Ident{
 							{
 								NamePos: 14,
 								Name:    "X",
@@ -84,11 +85,11 @@ func TestParser_Parse(t *testing.T) {
 						},
 						Closing: 15,
 					},
-					Value: &BinaryExpr{
-						X: &UnaryExpr{
+					Value: &ast.BinaryExpr{
+						X: &ast.UnaryExpr{
 							OpPos: 17,
 							Op:    token.SUB,
-							X: &BasicLit{
+							X: &ast.BasicLit{
 								ValuePos: 18,
 								Kind:     token.INT,
 								Value:    "1",
@@ -96,7 +97,7 @@ func TestParser_Parse(t *testing.T) {
 						},
 						OpPos: 20,
 						Op:    token.QUO,
-						Y: &Ident{
+						Y: &ast.Ident{
 							NamePos: 22,
 							Name:    "X",
 						},
@@ -106,17 +107,17 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			"#define VALUE (X) -1 / X",
-			[]Node{
-				&MacroDir{
+			[]ast.Node{
+				&ast.MacroDir{
 					DirPos: 0,
-					Name: &Ident{
+					Name: &ast.Ident{
 						NamePos: 8,
 						Name:    "VALUE",
 					},
-					Value: &BinaryExpr{
-						X: &ParenExpr{
+					Value: &ast.BinaryExpr{
+						X: &ast.ParenExpr{
 							Opening: 14,
-							Expr: &Ident{
+							Expr: &ast.Ident{
 								NamePos: 15,
 								Name:    "X",
 							},
@@ -124,15 +125,15 @@ func TestParser_Parse(t *testing.T) {
 						},
 						OpPos: 18,
 						Op:    token.SUB,
-						Y: &BinaryExpr{
-							X: &BasicLit{
+						Y: &ast.BinaryExpr{
+							X: &ast.BasicLit{
 								ValuePos: 19,
 								Kind:     token.INT,
 								Value:    "1",
 							},
 							OpPos: 21,
 							Op:    token.QUO,
-							Y: &Ident{
+							Y: &ast.Ident{
 								NamePos: 23,
 								Name:    "X",
 							},
@@ -143,8 +144,8 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			`#include "stddef.h"`,
-			[]Node{
-				&IncludeDir{
+			[]ast.Node{
+				&ast.IncludeDir{
 					DirPos:  0,
 					PathPos: 9,
 					Path:    `"stddef.h"`,
@@ -153,8 +154,8 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			`#include <stddef.h>`,
-			[]Node{
-				&IncludeDir{
+			[]ast.Node{
+				&ast.IncludeDir{
 					DirPos:  0,
 					PathPos: 9,
 					Path:    `<stddef.h>`,
@@ -163,8 +164,8 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			"#endif",
-			[]Node{
-				&EndIfDir{
+			[]ast.Node{
+				&ast.EndIfDir{
 					DirPos: 0,
 				},
 			},
@@ -174,8 +175,8 @@ func TestParser_Parse(t *testing.T) {
 		// #define (SD)
 		{
 			"1",
-			[]Node{
-				&BasicLit{
+			[]ast.Node{
+				&ast.BasicLit{
 					ValuePos: 0,
 					Kind:     token.INT,
 					Value:    "1",
@@ -184,11 +185,11 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			"-1",
-			[]Node{
-				&UnaryExpr{
+			[]ast.Node{
+				&ast.UnaryExpr{
 					OpPos: 0,
 					Op:    token.SUB,
-					X: &BasicLit{
+					X: &ast.BasicLit{
 						ValuePos: 1,
 						Kind:     token.INT,
 						Value:    "1",
@@ -205,9 +206,9 @@ func TestParser_Parse(t *testing.T) {
 
 			if !reflect.DeepEqual(actual, test.Value) {
 				bufGot := new(bytes.Buffer)
-				ast.Fprint(bufGot, nil, actual, ast.NotNilFilter)
+				goast.Fprint(bufGot, nil, actual, goast.NotNilFilter)
 				bufWant := new(bytes.Buffer)
-				ast.Fprint(bufWant, nil, test.Value, ast.NotNilFilter)
+				goast.Fprint(bufWant, nil, test.Value, goast.NotNilFilter)
 				t.Errorf("%s:\ngot:\n%swant:\n%s", parser.name, bufGot.String(), bufWant.String())
 			}
 		})

@@ -1,4 +1,4 @@
-package cgen
+package ast
 
 import "github.com/SHyx0rmZ/cgen/token"
 

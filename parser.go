@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SHyx0rmZ/cgen/ast"
 	"github.com/SHyx0rmZ/cgen/token"
 )
 
@@ -24,16 +25,16 @@ func NewParser(name, input string) *parser {
 	return &parser{lex: NewLexer(name, input), name: name, trace: true}
 }
 
-func (p *parser) Nodes() []Node {
-	var nodes []Node
+func (p *parser) Nodes() []ast.Node {
+	var nodes []ast.Node
 	for node := range p.Parse() {
 		nodes = append(nodes, node)
 	}
 	return nodes
 }
 
-func (p *parser) Parse() chan Node {
-	c := make(chan Node)
+func (p *parser) Parse() chan ast.Node {
+	c := make(chan ast.Node)
 	go func() {
 		defer close(c)
 		for {
@@ -42,7 +43,7 @@ func (p *parser) Parse() chan Node {
 			case itemEOF, itemError:
 				return
 			case itemEndIf:
-				c <- &EndIfDir{
+				c <- &ast.EndIfDir{
 					DirPos: i.pos,
 				}
 			case itemDefine:
@@ -54,7 +55,7 @@ func (p *parser) Parse() chan Node {
 					p.errorf("expected include path but found %s", p.peekNonSpace().typ)
 				}
 				i1 := p.nextNonSpace()
-				c <- &IncludeDir{
+				c <- &ast.IncludeDir{
 					DirPos:  i.pos,
 					PathPos: i1.pos,
 					Path:    i1.val,
@@ -64,10 +65,10 @@ func (p *parser) Parse() chan Node {
 					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
 				}
 				i1 := p.nextNonSpace()
-				c <- &IfDefDir{
+				c <- &ast.IfDefDir{
 					DirPos: i.pos,
-					Cond:   DEFINED,
-					Name: &Ident{
+					Cond:   ast.DEFINED,
+					Name: &ast.Ident{
 						NamePos: i1.pos,
 						Name:    i1.val,
 					},
@@ -77,16 +78,16 @@ func (p *parser) Parse() chan Node {
 					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
 				}
 				i1 := p.nextNonSpace()
-				c <- &IfDefDir{
+				c <- &ast.IfDefDir{
 					DirPos: i.pos,
-					Cond:   NOT_DEFINED,
-					Name: &Ident{
+					Cond:   ast.NOT_DEFINED,
+					Name: &ast.Ident{
 						NamePos: i1.pos,
 						Name:    i1.val,
 					},
 				}
 			case itemComment:
-				c <- &Comment{
+				c <- &ast.Comment{
 					Slash: i.pos,
 					Text:  i.val,
 				}
@@ -249,7 +250,7 @@ func (p *parser) Parse() chan Node {
 				}
 				fallthrough
 			case itemHexValue:
-				c <- &BasicLit{
+				c <- &ast.BasicLit{
 					ValuePos: i.pos,
 					Kind:     token.INT,
 					Value:    i.val,
@@ -295,7 +296,7 @@ func un(p *parser) {
 	}
 }
 
-func (p *parser) parseOperand() Expr {
+func (p *parser) parseOperand() ast.Expr {
 	/*switch p.tok {
 	case token.INT:
 		x := &BasicLit{
@@ -306,36 +307,36 @@ func (p *parser) parseOperand() Expr {
 		p.next()
 		return x
 	}*/
-	return &BadExpr{
+	return &ast.BadExpr{
 		From: p.pos,
 		To:   p.pos,
 	}
 }
 
-func (p *parser) parsePrimaryExpr() Expr {
+func (p *parser) parsePrimaryExpr() ast.Expr {
 	x := p.parseOperand()
 	return x
 }
 
-func (p *parser) parseUnaryExpr() Expr {
+func (p *parser) parseUnaryExpr() ast.Expr {
 	switch p.peekNonSpace().typ {
 	case itemHexValue:
 		number := p.next()
-		return &BasicLit{
+		return &ast.BasicLit{
 			ValuePos: number.pos,
 			Kind:     token.INT,
 			Value:    number.val,
 		}
 	case itemIdentifier:
 		identifier := p.next()
-		return &Ident{
+		return &ast.Ident{
 			NamePos: identifier.pos,
 			Name:    identifier.val,
 		}
 	case itemMinus:
 		operator := p.next()
 		expr := p.parseUnaryExpr()
-		return &UnaryExpr{
+		return &ast.UnaryExpr{
 			OpPos: operator.pos,
 			Op:    token.SUB,
 			X:     expr,
@@ -344,7 +345,7 @@ func (p *parser) parseUnaryExpr() Expr {
 		opening := p.next()
 		expr := p.parseExpr()
 		closing := p.expect(itemCloseParen, "parentheses expression")
-		return &ParenExpr{
+		return &ast.ParenExpr{
 			Opening: opening.pos,
 			Expr:    expr,
 			Closing: closing.pos,
@@ -366,7 +367,7 @@ func (p *parser) tokPrec() (item, token.Token, int) {
 	return tok, token.ILLEGAL_TOKEN, 0
 }
 
-func (p *parser) parseBinaryExpr(prec1 int) Expr {
+func (p *parser) parseBinaryExpr(prec1 int) ast.Expr {
 	x := p.parseUnaryExpr()
 	for {
 		op, tok, oprec := p.tokPrec()
@@ -374,7 +375,7 @@ func (p *parser) parseBinaryExpr(prec1 int) Expr {
 			return x
 		}
 		y := p.parseBinaryExpr(oprec + 1)
-		x = &BinaryExpr{
+		x = &ast.BinaryExpr{
 			X:     x,
 			OpPos: op.pos,
 			Op:    tok,
@@ -383,27 +384,27 @@ func (p *parser) parseBinaryExpr(prec1 int) Expr {
 	}
 }
 
-func (p *parser) parseExpr() Expr {
+func (p *parser) parseExpr() ast.Expr {
 	return p.parseBinaryExpr(1)
 }
 
-func (p *parser) parseArgList() *ArgList {
+func (p *parser) parseArgList() *ast.ArgList {
 	if p.peek().typ != itemOpenParen {
 		return nil
 	}
 
 	open := p.next()
-	var list []*Ident
+	var list []*ast.Ident
 	if p.peek().typ == itemIdentifier {
 		id := p.next()
-		list = append(list, &Ident{
+		list = append(list, &ast.Ident{
 			NamePos: id.pos,
 			Name:    id.val,
 		})
 
 		for p.peek().typ == itemComma {
 			id = p.expect(itemIdentifier, "macro argument list")
-			list = append(list, &Ident{
+			list = append(list, &ast.Ident{
 				NamePos: id.pos,
 				Name:    id.val,
 			})
@@ -411,23 +412,23 @@ func (p *parser) parseArgList() *ArgList {
 	}
 	closing := p.expect(itemCloseParen, "macro argument list")
 
-	return &ArgList{
+	return &ast.ArgList{
 		Opening: open.pos,
 		List:    list,
 		Closing: closing.pos,
 	}
 }
 
-func (p *parser) parseMacroDir() Dir {
+func (p *parser) parseMacroDir() ast.Dir {
 	keyword := p.expect(itemDefine, "macro definition")
 	name := p.expect(itemIdentifier, "macro definition")
 	args := p.parseArgList()
 	switch p.peek().typ {
 	case itemSpace, itemEOF:
 		if p.peek().val == "" || strings.Contains(p.peek().val, "\n") {
-			return &MacroDir{
+			return &ast.MacroDir{
 				DirPos: keyword.pos,
-				Name: &Ident{
+				Name: &ast.Ident{
 					NamePos: name.pos,
 					Name:    name.val,
 				},
@@ -438,9 +439,9 @@ func (p *parser) parseMacroDir() Dir {
 		fallthrough
 	default:
 		p.next()
-		return &MacroDir{
+		return &ast.MacroDir{
 			DirPos: keyword.pos,
-			Name: &Ident{
+			Name: &ast.Ident{
 				NamePos: name.pos,
 				Name:    name.val,
 			},
@@ -481,14 +482,14 @@ func (p *parser) parseMacroDir() Dir {
 	}*/
 }
 
-func (p *parser) parseParenExpr() Expr {
+func (p *parser) parseParenExpr() ast.Expr {
 	opening := p.expect(itemOpenParen, "parentheses expression")
-	var expr Expr
+	var expr ast.Expr
 	if p.peek().typ != itemCloseParen {
 		expr = p.parseExpr()
 	}
 	closing := p.expect(itemCloseParen, "parentheses expression")
-	return &ParenExpr{
+	return &ast.ParenExpr{
 		Opening: opening.pos,
 		Expr:    expr,
 		Closing: closing.pos,
