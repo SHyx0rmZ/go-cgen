@@ -1,15 +1,16 @@
 package cgen
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"bytes"
 	"github.com/SHyx0rmZ/cgen/token"
+	"go/ast"
 )
 
-func TestParser_ParsePreprocessorDirectives(t *testing.T) {
+func TestParser_Parse(t *testing.T) {
 	tests := []struct {
 		Input string
 		Value []Node
@@ -38,9 +39,9 @@ func TestParser_ParsePreprocessorDirectives(t *testing.T) {
 						Name:    "VALUE",
 					},
 					Args: &ArgList{
-						Opening: 0,
+						Opening: 13,
 						List:    nil,
-						Closing: 0,
+						Closing: 14,
 					},
 					Value: nil,
 				},
@@ -74,14 +75,14 @@ func TestParser_ParsePreprocessorDirectives(t *testing.T) {
 						Name:    "VALUE",
 					},
 					Args: &ArgList{
-						Opening: 0,
+						Opening: 13,
 						List: []*Ident{
 							{
-								NamePos: 0,
+								NamePos: 14,
 								Name:    "X",
 							},
 						},
-						Closing: 0,
+						Closing: 15,
 					},
 					Value: &BinaryExpr{
 						X: &UnaryExpr{
@@ -114,25 +115,25 @@ func TestParser_ParsePreprocessorDirectives(t *testing.T) {
 					},
 					Value: &BinaryExpr{
 						X: &ParenExpr{
-							Opening: 0,
+							Opening: 14,
 							Expr: &Ident{
-								NamePos: 0,
+								NamePos: 15,
 								Name:    "X",
 							},
-							Closing: 0,
+							Closing: 16,
 						},
-						OpPos: 0,
+						OpPos: 18,
 						Op:    token.SUB,
 						Y: &BinaryExpr{
 							X: &BasicLit{
-								ValuePos: 0,
+								ValuePos: 19,
 								Kind:     token.INT,
 								Value:    "1",
 							},
-							OpPos: 0,
+							OpPos: 21,
 							Op:    token.QUO,
 							Y: &Ident{
-								NamePos: 0,
+								NamePos: 23,
 								Name:    "X",
 							},
 						},
@@ -197,13 +198,18 @@ func TestParser_ParsePreprocessorDirectives(t *testing.T) {
 		},
 	}
 
-	for i, test := range tests {
-		parser := NewParser(fmt.Sprintf("test #%d", i), test.Input)
-		actual := parser.Nodes()
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%s", test.Input), func(t *testing.T) {
+			parser := NewParser(t.Name(), test.Input)
+			actual := parser.Nodes()
 
-		if !reflect.DeepEqual(actual, test.Value) {
-			bs, _ := json.MarshalIndent(actual, "", "  ")
-			t.Errorf("%s: got %s", parser.name, string(bs))
-		}
+			if !reflect.DeepEqual(actual, test.Value) {
+				bufGot := new(bytes.Buffer)
+				ast.Fprint(bufGot, nil, actual, ast.NotNilFilter)
+				bufWant := new(bytes.Buffer)
+				ast.Fprint(bufWant, nil, test.Value, ast.NotNilFilter)
+				t.Errorf("%s:\ngot:\n%swant:\n%s", parser.name, bufGot.String(), bufWant.String())
+			}
+		})
 	}
 }

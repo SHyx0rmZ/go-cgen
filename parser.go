@@ -12,10 +12,16 @@ type parser struct {
 	token     [3]item
 	peekCount int
 	name      string
+	indent    int
+	trace     bool
+
+	pos token.Pos
+	tok token.Token
+	lit string
 }
 
 func NewParser(name, input string) *parser {
-	return &parser{lex: NewLexer(name, input), name: name}
+	return &parser{lex: NewLexer(name, input), name: name, trace: true}
 }
 
 func (p *parser) Nodes() []Node {
@@ -32,7 +38,6 @@ func (p *parser) Parse() chan Node {
 		defer close(c)
 		for {
 			i := p.next()
-			//fmt.Printf("%s\n", i.typ)
 			switch i.typ {
 			case itemEOF, itemError:
 				return
@@ -41,57 +46,8 @@ func (p *parser) Parse() chan Node {
 					DirPos: i.pos,
 				}
 			case itemDefine:
-				if p.peekNonSpace().typ != itemIdentifier {
-					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
-				}
-				i1 := p.next()
-				//fmt.Printf("def %s %s\n", i1.typ, p.peek().typ)
-				switch p.peek().typ {
-				case itemSpace, itemEOF:
-					if p.peek().val == "" || strings.Contains(p.peek().val, "\n") {
-						//p.next()
-						c <- &MacroDir{
-							DirPos: i.pos,
-							Name: &Ident{
-								NamePos: i1.pos,
-								Name:    i1.val,
-							},
-							Value: nil,
-						}
-						continue
-					}
-					p.next()
-					switch p.peek().typ {
-					case itemHexValue:
-						i2 := p.nextNonSpace()
-						c <- &MacroDir{
-							DirPos: i.pos,
-							Name: &Ident{
-								NamePos: i1.pos,
-								Name:    i1.val,
-							},
-							Value: &BasicLit{
-								ValuePos: i2.pos,
-								Kind:     token.INT,
-								Value:    i2.val,
-							},
-						}
-					default:
-						i2 := p.peek()
-						fmt.Printf("%s\n", i1.typ)
-						fmt.Printf("%s\n", i2.typ)
-						for i2.typ != itemEOF && i2.typ != itemError && i2.typ != itemSpace {
-							i1 = p.next()
-							i2 = p.peek()
-						}
-						p.backup()
-						c <- &BadDir{
-							From: i.pos,
-							To:   token.Pos(int(i1.pos) + len(i1.val)),
-						}
-						//p.errorf("unexpected %s", p.peek().typ)
-					}
-				}
+				p.backup()
+				c <- p.parseMacroDir()
 				//panic("sad")
 			case itemInclude:
 				if p.peekNonSpace().typ != itemIncludePath && p.peekNonSpace().typ != itemIncludePathSystem {
@@ -309,12 +265,201 @@ func (p *parser) Parse() chan Node {
 						Value:    i1.val,
 					},
 				}
+			case itemOpenParen:
+				p.backup()
+				c <- p.parseParenExpr()
 			default:
-				fmt.Printf("%s\n", i)
 			}
 		}
 	}()
 	return c
+}
+
+func (p *parser) printTrace(a ...interface{}) {
+	const dots = ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . "
+	const n = len(dots)
+	fmt.Printf("%5d:???: ", p.pos)
+	i := 2 * p.indent
+	for i > n {
+		fmt.Print(dots)
+		i -= n
+	}
+	fmt.Print(dots[0:i])
+	fmt.Println(a...)
+}
+
+func trace(p *parser, msg string) *parser {
+	if p.trace {
+		p.printTrace(msg, "(")
+		p.indent++
+	}
+	return p
+}
+
+func un(p *parser) {
+	if p.trace {
+		p.indent--
+		p.printTrace(")")
+	}
+}
+
+func (p *parser) parseOperand() Expr {
+	/*switch p.tok {
+	case token.INT:
+		x := &BasicLit{
+			ValuePos: p.pos,
+			Kind:     p.tok,
+			Value:    p.lit,
+		}
+		p.next()
+		return x
+	}*/
+	return &BadExpr{
+		From: p.pos,
+		To:   p.pos,
+	}
+}
+
+func (p *parser) parsePrimaryExpr() Expr {
+	x := p.parseOperand()
+	return x
+}
+
+func (p *parser) parseUnaryExpr() Expr {
+	switch p.peek().typ {
+	case itemHexValue:
+		number := p.next()
+		return &BasicLit{
+			ValuePos: number.pos,
+			Kind:     token.INT,
+			Value:    number.val,
+		}
+	case itemIdentifier:
+		identifier := p.next()
+		return &Ident{
+			NamePos: identifier.pos,
+			Name:    identifier.val,
+		}
+	}
+
+	return p.parsePrimaryExpr()
+}
+
+func (p *parser) parseBinaryExpr() Expr {
+	x := p.parseUnaryExpr()
+	return x
+}
+
+func (p *parser) parseExpr() Expr {
+	return p.parseBinaryExpr()
+}
+
+func (p *parser) parseArgList() *ArgList {
+	if p.peek().typ != itemOpenParen {
+		return nil
+	}
+
+	open := p.next()
+	var list []*Ident
+	if p.peek().typ == itemIdentifier {
+		id := p.next()
+		list = append(list, &Ident{
+			NamePos: id.pos,
+			Name:    id.val,
+		})
+
+		for p.peek().typ == itemComma {
+			id = p.expect(itemIdentifier, "macro argument list")
+			list = append(list, &Ident{
+				NamePos: id.pos,
+				Name:    id.val,
+			})
+		}
+	}
+	closing := p.expect(itemCloseParen, "macro argument list")
+
+	return &ArgList{
+		Opening: open.pos,
+		List:    list,
+		Closing: closing.pos,
+	}
+}
+
+func (p *parser) parseMacroDir() Dir {
+	keyword := p.expect(itemDefine, "macro definition")
+	name := p.expect(itemIdentifier, "macro definition")
+	args := p.parseArgList()
+	switch p.peek().typ {
+	case itemSpace, itemEOF:
+		if p.peek().val == "" || strings.Contains(p.peek().val, "\n") {
+			return &MacroDir{
+				DirPos: keyword.pos,
+				Name: &Ident{
+					NamePos: name.pos,
+					Name:    name.val,
+				},
+				Args:  args,
+				Value: nil,
+			}
+		}
+		fallthrough
+	default:
+		p.next()
+		return &MacroDir{
+			DirPos: keyword.pos,
+			Name: &Ident{
+				NamePos: name.pos,
+				Name:    name.val,
+			},
+			Args:  args,
+			Value: p.parseExpr(),
+		}
+	}
+	/*
+		p.next()
+		switch p.peek().typ {
+		case itemHexValue:
+			//i2 := p.nextNonSpace()
+			return &MacroDir{
+				DirPos: keyword.pos,
+				Name: &Ident{
+					NamePos: name.pos,
+					Name:    name.val,
+				},
+				Args:  args,
+				Value: p.parseExpr(),
+			}
+		default:
+			i1 := p.next()
+			i2 := p.peek()
+			//fmt.Printf("%s\n", i1.typ)
+			//fmt.Printf("%s\n", i2.typ)
+			for i2.typ != itemEOF && i2.typ != itemError && i2.typ != itemSpace {
+				i1 = p.next()
+				i2 = p.peek()
+			}
+			p.backup()
+			return &BadDir{
+				From: keyword.pos,
+				To:   token.Pos(int(i1.pos) + len(i1.val)),
+			}
+			//p.errorf("unexpected %s", p.peek().typ)
+		}
+	}*/
+}
+
+func (p *parser) parseParenExpr() Expr {
+	opening := p.expect(itemOpenParen, "parentheses expression")
+	var expr Expr
+	if p.peek().typ != itemCloseParen {
+		expr = p.parseExpr()
+	}
+	closing := p.expect(itemCloseParen, "parentheses expression")
+	return &ParenExpr{
+		Opening: opening.pos,
+		Expr:    expr,
+		Closing: closing.pos,
+	}
 }
 
 func (p *parser) next() item {
@@ -323,6 +468,7 @@ func (p *parser) next() item {
 	} else {
 		p.token[0] = p.lex.nextItem()
 	}
+	p.pos, p.tok, p.lit = p.token[p.peekCount].pos, token.INT, p.token[p.peekCount].val
 	return p.token[p.peekCount]
 }
 
