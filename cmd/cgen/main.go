@@ -50,4 +50,8 @@ func main() {
 	//}
 	parser := cgen.NewParser(filepath.Base(os.Args[1]), b.String())
 	ast.Print(nil, parser.Nodes())
+	err = parser.Err()
+	if err != nil {
+		panic(err)
+	}
 }

@@ -57,6 +57,7 @@ const (
 	itemDecrement
 	itemMinus
 	itemSlash
+	itemString
 )
 
 func (t itemType) String() string {
@@ -117,6 +118,8 @@ func (t itemType) String() string {
 		return "itemDecrement"
 	case itemSlash:
 		return "itemSlash"
+	case itemString:
+		return "itemString"
 	default:
 		return "itemUnknown"
 	}

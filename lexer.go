@@ -114,8 +114,8 @@ func lexLineStart(l *lexer) stateFn {
 	switch {
 	case strings.HasPrefix(l.input[l.pos:], "/*"):
 		return lexMultilineComment
-	case l.peek() == '\n':
-		l.next()
+	case l.accept(" \n\t"):
+		l.acceptRun(" \n\t")
 		l.emit(itemSpace)
 		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#ifndef"):
@@ -149,10 +149,6 @@ func lexLineStart(l *lexer) stateFn {
 	case l.peek() == ')':
 		l.next()
 		l.emit(itemCloseParen)
-		return lexLineStart
-	case l.peek() == ' ':
-		l.acceptRun(" ")
-		l.emit(itemSpace)
 		return lexLineStart
 	case l.peek() == '\\':
 		l.next()
@@ -202,6 +198,8 @@ func lexLineStart(l *lexer) stateFn {
 		l.next()
 		l.emit(itemSlash)
 		return lexLineStart
+	case l.peek() == '"':
+		return lexString
 	default:
 		if l.accept("_" + groupLower + groupUpper) {
 			return lexIdentifier
@@ -220,17 +218,33 @@ const (
 	groupDigits = "0123456789"
 )
 
+func lexString(l *lexer) stateFn {
+	l.next()
+	for {
+		n := l.peek()
+		if n == '"' {
+			l.next()
+			l.emit(itemString)
+			return lexLineStart
+		}
+		if n == '\\' {
+			l.next()
+			n = l.peek()
+		}
+		l.next()
+	}
+}
+
 func lexExtern(l *lexer) stateFn {
 	l.pos += token.Pos(len("extern"))
-	l.ignore()
+	l.emit(itemExtern)
 	l.acceptRun(" ")
 	l.emit(itemSpace)
-	if strings.HasPrefix(l.input[l.pos:], `"C"`) {
-		l.pos += token.Pos(len(`"C"`))
-		l.emit(itemExternC)
-		//return lexLineStart
-	}
-	l.emit(itemExtern)
+	//if strings.HasPrefix(l.input[l.pos:], `"C"`) {
+	//	l.pos += token.Pos(len(`"C"`))
+	//	l.emit(itemExternC)
+	//	//return lexLineStart
+	//}
 	return lexLineStart
 }
 

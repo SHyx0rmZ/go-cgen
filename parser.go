@@ -16,13 +16,23 @@ type parser struct {
 	indent    int
 	trace     bool
 
-	pos token.Pos
-	tok token.Token
-	lit string
+	pos   token.Pos
+	tok   token.Token
+	lit   string
+	error chan error
 }
 
 func NewParser(name, input string) *parser {
-	return &parser{lex: NewLexer(name, input), name: name, trace: true}
+	return &parser{lex: NewLexer(name, input), name: name, trace: true, error: make(chan error, 1)}
+}
+
+func (p *parser) Err() error {
+	select {
+	case err := <-p.error:
+		return err
+	default:
+		return nil
+	}
 }
 
 func (p *parser) Nodes() []ast.Node {
@@ -40,8 +50,10 @@ func (p *parser) Parse() chan ast.Node {
 		for {
 			i := p.next()
 			switch i.typ {
-			case itemEOF, itemError:
+			case itemEOF:
 				return
+			case itemError:
+				p.errorf(i.val)
 			case itemEndIf:
 				c <- &ast.EndIfDir{
 					DirPos: i.pos,
@@ -93,6 +105,17 @@ func (p *parser) Parse() chan ast.Node {
 				}
 			case itemIdentifier:
 				if i.val == "typedef" {
+					for {
+						i2 := p.next()
+						if i2.typ == itemSpace && strings.Contains(i2.val, "\n") {
+							c <- &ast.BadExpr{
+								From: i.pos,
+								To:   i2.pos,
+							}
+							break
+						}
+					}
+					continue
 					i1 := p.peekNonSpace()
 					switch {
 					case i1.typ == itemIdentifier && i1.val == "struct":
@@ -248,10 +271,18 @@ func (p *parser) Parse() chan ast.Node {
 						*/
 					}
 				}
-				fallthrough
+				//fallthrough
 			//case itemOpenParen:
 			//	p.backup()
 			//	c <- p.parseParenExpr()
+			case itemExtern:
+				p.backup()
+				c <- p.parseExternDecl()
+			case itemSpace:
+				if strings.Contains(i.val, "\n") {
+					continue
+				}
+				fallthrough
 			default:
 				p.backup()
 				c <- p.parseExpr()
@@ -286,6 +317,30 @@ func un(p *parser) {
 	if p.trace {
 		p.indent--
 		p.printTrace(")")
+	}
+}
+
+func (p *parser) parseExternDecl() ast.Decl {
+	keyword := p.expect(itemExtern, "external declaration")
+	next := p.peekNonSpace()
+	if next.typ == itemString && next.val == `"C"` {
+		p.next()
+		curly := p.expect(itemOpenCurly, "external declaration")
+		return &ast.ExternDecl{
+			KeyPos: keyword.pos,
+			Decl: &ast.CDecl{
+				Value: &ast.BasicLit{
+					ValuePos: next.pos,
+					Kind:     token.STRING,
+					Value:    next.val,
+				},
+				BodyPos: curly.pos,
+			},
+		}
+	}
+	return &ast.ExternDecl{
+		KeyPos: keyword.pos,
+		Decl:   nil,
 	}
 }
 
@@ -344,6 +399,8 @@ func (p *parser) parseUnaryExpr() ast.Expr {
 			Closing: closing.pos,
 		}
 	}
+
+	fmt.Printf("B %s\n", p.peekNonSpace())
 
 	return p.parsePrimaryExpr()
 }
@@ -500,7 +557,7 @@ func (p *parser) next() item {
 }
 
 func (p *parser) backup() {
-	p.peekCount++
+	p.peekCount = 1
 }
 
 func (p *parser) peek() item {
@@ -535,6 +592,11 @@ func (p *parser) peekNonSpace() (token item) {
 
 func (p *parser) errorf(format string, args ...interface{}) {
 	format = fmt.Sprintf("cgen: %s:%d: %s", p.name, p.token[0].line, format)
+	go func() {
+		for {
+			p.error <- fmt.Errorf(format, args...)
+		}
+	}()
 	panic(fmt.Errorf(format, args...))
 }
 

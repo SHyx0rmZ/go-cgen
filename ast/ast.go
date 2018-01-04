@@ -211,16 +211,32 @@ func (*BadStmt) stmtNode() {}
 type (
 	TypeDecl struct {
 		KeyPos token.Pos
-		Decl   *Decl
+		Decl   Decl
 		Name   *Ident
+	}
+
+	ExternDecl struct {
+		KeyPos token.Pos
+		Decl   Decl
+	}
+
+	CDecl struct {
+		Value   *BasicLit
+		BodyPos token.Pos
 	}
 )
 
-func (d *TypeDecl) Pos() token.Pos { return d.KeyPos }
+func (d *TypeDecl) Pos() token.Pos   { return d.KeyPos }
+func (d *ExternDecl) Pos() token.Pos { return d.KeyPos }
+func (d *CDecl) Pos() token.Pos      { return d.Value.Pos() }
 
-func (d *TypeDecl) End() token.Pos { return d.Name.End() }
+func (d *TypeDecl) End() token.Pos   { return d.Name.End() }
+func (d *ExternDecl) End() token.Pos { return d.Decl.End() }
+func (d *CDecl) End() token.Pos      { return d.Value.End() }
 
-func (*TypeDecl) declNode() {}
+func (*TypeDecl) declNode()   {}
+func (*ExternDecl) declNode() {}
+func (*CDecl) declNode()      {}
 
 // ----------------------------------------------------------------------------
 func (StructDecl) exprNode() {}

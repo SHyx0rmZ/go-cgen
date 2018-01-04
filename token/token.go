@@ -8,6 +8,7 @@ const (
 
 	literal_beg
 	INT
+	STRING
 	literal_end
 
 	operator_beg
