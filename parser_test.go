@@ -172,7 +172,6 @@ func TestParser_Parse(t *testing.T) {
 		},
 		// #endif
 		// extern "C" {
-		// #define (SD)
 		{
 			"1",
 			[]ast.Node{
@@ -191,6 +190,25 @@ func TestParser_Parse(t *testing.T) {
 					Op:    token.SUB,
 					X: &ast.BasicLit{
 						ValuePos: 1,
+						Kind:     token.INT,
+						Value:    "1",
+					},
+				},
+			},
+		},
+		{
+			"1 / 1",
+			[]ast.Node{
+				&ast.BinaryExpr{
+					X: &ast.BasicLit{
+						ValuePos: 0,
+						Kind:     token.INT,
+						Value:    "1",
+					},
+					OpPos: 2,
+					Op:    token.QUO,
+					Y: &ast.BasicLit{
+						ValuePos: 4,
 						Kind:     token.INT,
 						Value:    "1",
 					},

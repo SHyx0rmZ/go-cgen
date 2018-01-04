@@ -249,19 +249,12 @@ func (p *parser) Parse() chan ast.Node {
 					}
 				}
 				fallthrough
-			case itemHexValue:
-				c <- &ast.BasicLit{
-					ValuePos: i.pos,
-					Kind:     token.INT,
-					Value:    i.val,
-				}
-			case itemMinus:
-				p.backup()
-				c <- p.parseUnaryExpr()
 			//case itemOpenParen:
 			//	p.backup()
 			//	c <- p.parseParenExpr()
 			default:
+				p.backup()
+				c <- p.parseExpr()
 			}
 		}
 	}()
