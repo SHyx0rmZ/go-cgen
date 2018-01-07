@@ -1,0 +1,68 @@
+resources:
+- name: build-status
+  type: github-status
+  source:
+    access_token: ((github-access-token))
+    context: concourse
+    repository: SHyx0rmZ/go-cgen
+  check_every: 15m
+
+- name: code
+  type: git
+  source:
+    branch: master
+    uri: git@github.com:SHyx0rmZ/go-cgen.git
+    private_key: ((deploy-key-cgen))
+  check_every: 15m
+
+
+resource_types:
+- name: github-status
+  type: docker-image
+  source:
+    repository: dpb587/github-status-resource
+    tag: master
+
+
+jobs:
+- name: tests
+  plan:
+  - get: code
+    trigger: true
+    version: every
+  - task: run-tests
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: shyxormz/golang
+          tag: latest
+      run:
+        path: sh
+        args:
+        - -ec
+        - |
+          export GOPATH=$PWD/gopath
+          export PATH=$PWD/gopath/bin:$PATH
+
+          cd gopath/src/github.com/SHyx0rmZ/cgen
+
+          go test ./...
+      inputs:
+      - name: code
+        path: gopath/src/github.com/SHyx0rmZ/cgen
+    on_failure:
+      put: build-status
+      params:
+        commit: code
+        description: The commit failed some tests.
+        state: failure
+        target_url: https://github.com/SHyx0rmZ/go-cgen
+    on_success:
+      put: build-status
+      params:
+        commit: code
+        description: The commit passed all tests.
+        state: success
+        target_url: https://github.com/SHyx0rmZ/go-cgen
