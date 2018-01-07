@@ -1,4 +1,4 @@
-package cgen
+package lexer
 
 import (
 	"fmt"
@@ -12,6 +12,10 @@ const eof = -1
 
 type stateFn func(*lexer) stateFn
 
+type Lexer interface {
+	NextItem() Item
+}
+
 type lexer struct {
 	name    string
 	input   string
@@ -20,7 +24,7 @@ type lexer struct {
 	start   token.Pos
 	width   token.Pos
 	lastPos token.Pos
-	items   chan item
+	items   chan Item
 	line    int
 }
 
@@ -28,7 +32,7 @@ func NewLexer(name, input string) *lexer {
 	l := &lexer{
 		name:  name,
 		input: input,
-		items: make(chan item),
+		items: make(chan Item),
 		line:  1,
 	}
 	go l.run()
@@ -62,8 +66,8 @@ func (l *lexer) backup() {
 	}
 }
 
-func (l *lexer) emit(t itemType) {
-	l.items <- item{t, l.start, l.input[l.start:l.pos], l.line}
+func (l *lexer) emit(t ItemType) {
+	l.items <- Item{t, l.start, l.input[l.start:l.pos], l.line}
 	switch t {
 	}
 	l.start = l.pos
@@ -88,13 +92,13 @@ func (l *lexer) acceptRun(valid string) {
 }
 
 func (l *lexer) errorf(format string, args ...interface{}) stateFn {
-	l.items <- item{itemError, l.start, fmt.Sprintf(format, args...), l.line}
+	l.items <- Item{ItemError, l.start, fmt.Sprintf(format, args...), l.line}
 	return nil
 }
 
-func (l *lexer) nextItem() item {
+func (l *lexer) NextItem() Item {
 	item := <-l.items
-	l.lastPos = item.pos
+	l.lastPos = item.Pos
 	return item
 }
 
@@ -116,7 +120,7 @@ func lexLineStart(l *lexer) stateFn {
 		return lexMultilineComment
 	case l.accept(" \n\t"):
 		l.acceptRun(" \n\t")
-		l.emit(itemSpace)
+		l.emit(ItemSpace)
 		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#ifndef"):
 		return lexIfNotDefined
@@ -130,29 +134,29 @@ func lexLineStart(l *lexer) stateFn {
 		return lexExtern
 	case strings.HasPrefix(l.input[l.pos:], "#else"):
 		l.pos += token.Pos(len("#else"))
-		l.emit(itemElseDir)
+		l.emit(ItemElseDir)
 		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#endif"):
 		l.pos += token.Pos(len("#endif"))
-		l.emit(itemEndIf)
+		l.emit(ItemEndIf)
 		return lexLineStart
 	case l.accept(groupDigits):
 		return lexHexValue
 	case l.peek() == '{':
 		l.next()
-		l.emit(itemOpenCurly)
+		l.emit(ItemOpenCurly)
 		return lexLineStart
 	case l.peek() == '}':
 		l.next()
-		l.emit(itemCloseCurly)
+		l.emit(ItemCloseCurly)
 		return lexLineStart
 	case l.peek() == '(':
 		l.next()
-		l.emit(itemOpenParen)
+		l.emit(ItemOpenParen)
 		return lexLineStart
 	case l.peek() == ')':
 		l.next()
-		l.emit(itemCloseParen)
+		l.emit(ItemCloseParen)
 		return lexLineStart
 	case l.peek() == '\\':
 		l.next()
@@ -161,46 +165,46 @@ func lexLineStart(l *lexer) stateFn {
 	case l.peek() == '|':
 		l.next()
 		if l.accept("|") {
-			l.emit(itemLogicalOr)
+			l.emit(ItemLogicalOr)
 			return lexLineStart
 		}
-		l.emit(itemBitwiseOr)
+		l.emit(ItemBitwiseOr)
 		return lexLineStart
 	case l.peek() == ';':
 		l.next()
-		l.emit(itemSemicolon)
+		l.emit(ItemSemicolon)
 		return lexLineStart
 	case l.peek() == '*':
 		l.next()
-		l.emit(itemStar)
+		l.emit(ItemStar)
 		return lexLineStart
 	case l.peek() == ',':
 		l.next()
-		l.emit(itemComma)
+		l.emit(ItemComma)
 		return lexLineStart
 	case l.peek() == '=':
 		l.next()
-		l.emit(itemEqualSign)
+		l.emit(ItemEqualSign)
 		return lexLineStart
 	case l.peek() == '&':
 		l.next()
 		if l.accept("&") {
-			l.emit(itemLogicalAnd)
+			l.emit(ItemLogicalAnd)
 			return lexLineStart
 		}
-		l.emit(itemBitwiseAnd)
+		l.emit(ItemBitwiseAnd)
 		return lexLineStart
 	case l.peek() == '-':
 		l.next()
 		if l.accept("-") {
-			l.emit(itemDecrement)
+			l.emit(ItemDecrement)
 			return lexLineStart
 		}
-		l.emit(itemMinus)
+		l.emit(ItemMinus)
 		return lexLineStart
 	case l.peek() == '/':
 		l.next()
-		l.emit(itemSlash)
+		l.emit(ItemSlash)
 		return lexLineStart
 	case l.peek() == '"':
 		return lexString
@@ -209,7 +213,7 @@ func lexLineStart(l *lexer) stateFn {
 			return lexIdentifier
 		}
 		if int(l.pos) == len(l.input) {
-			l.emit(itemEOF)
+			l.emit(ItemEOF)
 			return nil
 		}
 		return l.errorf("unknown: %.30q...", l.input[l.pos:])
@@ -228,7 +232,7 @@ func lexString(l *lexer) stateFn {
 		n := l.peek()
 		if n == '"' {
 			l.next()
-			l.emit(itemString)
+			l.emit(ItemString)
 			return lexLineStart
 		}
 		if n == '\\' {
@@ -241,12 +245,12 @@ func lexString(l *lexer) stateFn {
 
 func lexExtern(l *lexer) stateFn {
 	l.pos += token.Pos(len("extern"))
-	l.emit(itemExtern)
+	l.emit(ItemExtern)
 	l.acceptRun(" ")
-	l.emit(itemSpace)
-	//if strings.HasPrefix(l.input[l.pos:], `"C"`) {
-	//	l.pos += token.Pos(len(`"C"`))
-	//	l.emit(itemExternC)
+	l.emit(ItemSpace)
+	//if strings.HasPrefix(l.input[l.Pos:], `"C"`) {
+	//	l.Pos += token.Pos(len(`"C"`))
+	//	l.emit(ItemExternC)
 	//	//return lexLineStart
 	//}
 	return lexLineStart
@@ -254,21 +258,21 @@ func lexExtern(l *lexer) stateFn {
 
 func lexInclude(l *lexer) stateFn {
 	l.pos += token.Pos(len("#include"))
-	l.emit(itemInclude)
+	l.emit(ItemInclude)
 	l.acceptRun(" ")
-	l.emit(itemSpace)
+	l.emit(ItemSpace)
 	switch l.next() {
 	case '"':
 		l.acceptRun(groupLower + groupUpper + groupDigits + "_-/\\.")
 		if l.accept(`"`) {
-			l.emit(itemIncludePath)
+			l.emit(ItemIncludePath)
 			return lexLineStart
 		}
 		return l.errorf("expected closing quotes")
 	case '<':
 		l.acceptRun(groupLower + groupUpper + groupDigits + "_-/\\.")
 		if l.accept(">") {
-			l.emit(itemIncludePathSystem)
+			l.emit(ItemIncludePathSystem)
 			return lexLineStart
 		}
 		return l.errorf("expected closing angle bracket")
@@ -280,14 +284,14 @@ func lexInclude(l *lexer) stateFn {
 func lexHexValue(l *lexer) stateFn {
 	l.acceptRun("x0123456789abcdefABCDEF")
 	l.accept("u")
-	l.emit(itemHexValue)
+	l.emit(ItemHexValue)
 	return lexLineStart
 }
 
 func lexIdentifier(l *lexer) stateFn {
 	//if l.accept("_" + groupLower + groupUpper) {
 	l.acceptRun("_" + groupLower + groupUpper + groupDigits)
-	l.emit(itemIdentifier)
+	l.emit(ItemIdentifier)
 	return lexLineStart
 	//}
 	//return l.errorf("expected identifier")
@@ -295,12 +299,12 @@ func lexIdentifier(l *lexer) stateFn {
 
 func lexDefine(l *lexer) stateFn {
 	l.pos += token.Pos(len("#define"))
-	l.emit(itemDefine)
+	l.emit(ItemDefine)
 	return lexLineStart
 }
 
 //func lexIfDefined(l *lexer) stateFn {
-//	l.pos += Pos(len("#ifdef"))
+//	l.Pos += Pos(len("#ifdef"))
 //	l.acceptRun(" ")
 //	l.ignore()
 //	if l.accept("_" + groupUpper + groupLower) {
@@ -308,7 +312,7 @@ func lexDefine(l *lexer) stateFn {
 //		if l.peek() != '\n' {
 //			return l.errorf("expected line break")
 //		}
-//		l.emit(itemIfDefined)
+//		l.emit(ItemIfDefined)
 //		return lexLineStart
 //	}
 //	return l.errorf("expected identifier")
@@ -316,13 +320,13 @@ func lexDefine(l *lexer) stateFn {
 
 func lexIfDefined(l *lexer) stateFn {
 	l.pos += token.Pos(len("#ifdef"))
-	l.emit(itemIfDefined)
+	l.emit(ItemIfDefined)
 	return lexLineStart
 }
 
 func lexIfNotDefined(l *lexer) stateFn {
 	l.pos += token.Pos(len("#ifndef"))
-	l.emit(itemIfNotDefined)
+	l.emit(ItemIfNotDefined)
 	return lexLineStart
 }
 
@@ -332,14 +336,14 @@ func lexMultilineComment(l *lexer) stateFn {
 		n := l.next()
 		for n != '*' {
 			if n == eof {
-				l.emit(itemEOF)
+				l.emit(ItemEOF)
 				return nil
 			}
 			n = l.next()
 		}
 		if l.peek() == '/' {
 			l.next()
-			l.emit(itemComment)
+			l.emit(ItemComment)
 			break
 		}
 	}

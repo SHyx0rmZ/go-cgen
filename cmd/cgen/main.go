@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	//"fmt"
-	"github.com/SHyx0rmZ/cgen"
+	"github.com/SHyx0rmZ/cgen/parser"
 	"go/ast"
 	"io"
 	"os"
@@ -48,7 +48,7 @@ func main() {
 		}
 	*/
 	//}
-	parser := cgen.NewParser(filepath.Base(os.Args[1]), b.String())
+	parser := parser.NewParser(filepath.Base(os.Args[1]), b.String())
 	ast.Print(nil, parser.Nodes())
 	err = parser.Err()
 	if err != nil {

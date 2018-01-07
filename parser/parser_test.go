@@ -1,4 +1,4 @@
-package cgen
+package parser
 
 import (
 	"fmt"

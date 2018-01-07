@@ -1,16 +1,17 @@
-package cgen
+package parser
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/SHyx0rmZ/cgen/ast"
+	"github.com/SHyx0rmZ/cgen/lexer"
 	"github.com/SHyx0rmZ/cgen/token"
 )
 
 type parser struct {
-	lex       *lexer
-	token     [3]item
+	lex       lexer.Lexer
+	token     [3]lexer.Item
 	peekCount int
 	name      string
 	indent    int
@@ -23,7 +24,7 @@ type parser struct {
 }
 
 func NewParser(name, input string) *parser {
-	return &parser{lex: NewLexer(name, input), name: name, trace: true, error: make(chan error, 1)}
+	return &parser{lex: lexer.NewLexer(name, input), name: name, trace: true, error: make(chan error, 1)}
 }
 
 func (p *parser) Err() error {
@@ -49,72 +50,72 @@ func (p *parser) Parse() chan ast.Node {
 		defer close(c)
 		for {
 			i := p.next()
-			switch i.typ {
-			case itemEOF:
+			switch i.Typ {
+			case lexer.ItemEOF:
 				return
-			case itemError:
-				p.errorf(i.val)
-			case itemEndIf:
+			case lexer.ItemError:
+				p.errorf(i.Val)
+			case lexer.ItemEndIf:
 				c <- &ast.EndIfDir{
-					DirPos: i.pos,
+					DirPos: i.Pos,
 				}
-			case itemElseDir:
+			case lexer.ItemElseDir:
 				c <- &ast.ElseDir{
-					DirPos: i.pos,
+					DirPos: i.Pos,
 				}
-			case itemDefine:
+			case lexer.ItemDefine:
 				p.backup()
 				c <- p.parseMacroDir()
 				//panic("sad")
-			case itemInclude:
-				if p.peekNonSpace().typ != itemIncludePath && p.peekNonSpace().typ != itemIncludePathSystem {
-					p.errorf("expected include path but found %s", p.peekNonSpace().typ)
+			case lexer.ItemInclude:
+				if p.peekNonSpace().Typ != lexer.ItemIncludePath && p.peekNonSpace().Typ != lexer.ItemIncludePathSystem {
+					p.errorf("expected include path but found %s", p.peekNonSpace().Typ)
 				}
 				i1 := p.nextNonSpace()
 				c <- &ast.IncludeDir{
-					DirPos:  i.pos,
-					PathPos: i1.pos,
-					Path:    i1.val,
+					DirPos:  i.Pos,
+					PathPos: i1.Pos,
+					Path:    i1.Val,
 				}
-			case itemIfDefined:
-				if p.peekNonSpace().typ != itemIdentifier {
-					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
+			case lexer.ItemIfDefined:
+				if p.peekNonSpace().Typ != lexer.ItemIdentifier {
+					p.errorf("expected identifier but found %s", p.peekNonSpace().Typ)
 				}
 				i1 := p.nextNonSpace()
 				c <- &ast.IfDefDir{
-					DirPos: i.pos,
+					DirPos: i.Pos,
 					Cond:   ast.DEFINED,
 					Name: &ast.Ident{
-						NamePos: i1.pos,
-						Name:    i1.val,
+						NamePos: i1.Pos,
+						Name:    i1.Val,
 					},
 				}
-			case itemIfNotDefined:
-				if p.peekNonSpace().typ != itemIdentifier {
-					p.errorf("expected identifier but found %s", p.peekNonSpace().typ)
+			case lexer.ItemIfNotDefined:
+				if p.peekNonSpace().Typ != lexer.ItemIdentifier {
+					p.errorf("expected identifier but found %s", p.peekNonSpace().Typ)
 				}
 				i1 := p.nextNonSpace()
 				c <- &ast.IfDefDir{
-					DirPos: i.pos,
+					DirPos: i.Pos,
 					Cond:   ast.NOT_DEFINED,
 					Name: &ast.Ident{
-						NamePos: i1.pos,
-						Name:    i1.val,
+						NamePos: i1.Pos,
+						Name:    i1.Val,
 					},
 				}
-			case itemComment:
+			case lexer.ItemComment:
 				c <- &ast.Comment{
-					Slash: i.pos,
-					Text:  i.val,
+					Slash: i.Pos,
+					Text:  i.Val,
 				}
-			case itemIdentifier:
-				if i.val == "typedef" {
+			case lexer.ItemIdentifier:
+				if i.Val == "typedef" {
 					for {
 						i2 := p.next()
-						if i2.typ == itemSpace && strings.Contains(i2.val, "\n") {
+						if i2.Typ == lexer.ItemSpace && strings.Contains(i2.Val, "\n") {
 							c <- &ast.BadExpr{
-								From: i.pos,
-								To:   i2.pos,
+								From: i.Pos,
+								To:   i2.Pos,
 							}
 							break
 						}
@@ -122,24 +123,24 @@ func (p *parser) Parse() chan ast.Node {
 					continue
 					i1 := p.peekNonSpace()
 					switch {
-					case i1.typ == itemIdentifier && i1.val == "struct":
+					case i1.Typ == lexer.ItemIdentifier && i1.Val == "struct":
 						p.nextNonSpace()
-						switch p.peekNonSpace().typ {
+						switch p.peekNonSpace().Typ {
 						/*
-							case itemOpenCurly:
+							case lexer.ItemOpenCurly:
 								var ns []Expr
 								for {
 									ic := p.nextNonSpace()
-									if ic.typ == itemCloseCurly {
+									if ic.typ == lexer.ItemCloseCurly {
 										break
 									}
 								}
-								i2 := p.expect(itemIdentifier, "typedef")
-								p.expect(itemSemicolon, "typedef")
+								i2 := p.expect(lexer.ItemIdentifier, "typedef")
+								p.expect(lexer.ItemSemicolon, "typedef")
 								c <- &TypeDecl{
 									Name: Ident{
-										NamePos: i2.pos,
-										Name:    i2.val,
+										NamePos: i2.Pos,
+										Name:    i2.Val,
 									},
 									Expr: StructDecl{
 										Nodes: ns,
@@ -147,19 +148,19 @@ func (p *parser) Parse() chan ast.Node {
 								}
 						*/
 						/*
-							case itemIdentifier:
+							case lexer.ItemIdentifier:
 								i2 := p.nextNonSpace()
-								i3 := p.expect(itemIdentifier, "typedef")
-								p.expect(itemSemicolon, "typedef")
+								i3 := p.expect(lexer.ItemIdentifier, "Typedef")
+								p.expect(lexer.ItemSemicolon, "typedef")
 								c <- TypeDecl{
 									Name: Ident{
-										NamePos: i3.pos,
-										Name:    i3.val,
+										NamePos: i3.Pos,
+										Name:    i3.Val,
 									},
 									Expr: StructType{
 										Name: Ident{
-											NamePos: i2.pos,
-											Name:    i2.val,
+											NamePos: i2.Pos,
+											Name:    i2.Val,
 										},
 									},
 								}
@@ -169,103 +170,103 @@ func (p *parser) Parse() chan ast.Node {
 						}
 						continue
 						/*
-							case i1.typ == itemIdentifier && i1.val == "enum":
+							case i1.Typ == lexer.ItemIdentifier && i1.Val == "enum":
 								p.nextNonSpace()
-								p.expect(itemOpenCurly, "typedef")
+								p.expect(lexer.ItemOpenCurly, "typedef")
 								var ds []EnumSpec
 								for {
 									ic := p.peekNonSpace()
-									if ic.typ == itemCloseCurly {
+									if ic.Typ == lexer.ItemCloseCurly {
 										break
 									}
-									if ic.typ == itemComment {
+									if ic.Typ == lexer.ItemComment {
 										p.nextNonSpace()
 										continue
 									}
-									ic = p.expect(itemIdentifier, "enum")
+									ic = p.expect(lexer.ItemIdentifier, "enum")
 									ic1 := p.peekNonSpace()
-									if ic1.typ != itemComma && ic1.typ != itemCloseCurly && ic1.typ != itemComment {
-										p.expect(itemEqualSign, "enum")
-										switch p.peekNonSpace().typ {
-										case itemHexValue:
-											ic3 := p.expect(itemHexValue, "enum")
-											if p.peekNonSpace().typ == itemComment {
+									if ic1.Typ != lexer.ItemComma && ic1.Typ != lexer.ItemCloseCurly && ic1.Typ != lexer.ItemComment {
+										p.expect(lexer.ItemEqualSign, "enum")
+										switch p.peekNonSpace().Typ {
+										case lexer.ItemHexValue:
+											ic3 := p.expect(lexer.ItemHexValue, "enum")
+											if p.peekNonSpace().Typ == lexer.ItemComment {
 												p.nextNonSpace()
 											}
 											ds = append(ds, EnumValue{
 												Name: Ident{
-													NamePos: ic.pos,
-													Name:    ic.val,
+													NamePos: ic.Pos,
+													Name:    ic.Val,
 												},
 												Value: &BasicLit{
-													ValuePos: ic3.pos,
+													ValuePos: ic3.Pos,
 													Kind:     Number,
-													Value:    ic3.val,
+													Value:    ic3.Val,
 												},
 											})
-										case itemOpenParen:
-											p.expect(itemOpenParen, "enum hack")
-											ic3 := p.expect(itemIdentifier, "enum hack")
-											ic4 := p.expect(itemBitwiseOr, "enum hack")
-											ic5 := p.expect(itemHexValue, "enum hack")
-											p.expect(itemCloseParen, "enum hack")
+										case lexer.ItemOpenParen:
+											p.expect(lexer.ItemOpenParen, "enum hack")
+											ic3 := p.expect(lexer.ItemIdentifier, "enum hack")
+											ic4 := p.expect(lexer.ItemBitwiseOr, "enum hack")
+											ic5 := p.expect(lexer.ItemHexValue, "enum hack")
+											p.expect(lexer.ItemCloseParen, "enum hack")
 											ds = append(ds, EnumConstExpr{
 												Name: Ident{
-													NamePos: ic.pos,
-													Name:    ic.val,
+													NamePos: ic.Pos,
+													Name:    ic.Val,
 												},
 												Expr: BinaryExpr{
 													X: Ident{
-														NamePos: ic3.pos,
-														Name:    ic3.val,
+														NamePos: ic3.Pos,
+														Name:    ic3.Val,
 													},
-													OpPos: ic4.pos,
+													OpPos: ic4.Pos,
 													Op:    BitwiseOrOp,
 													Y: BasicLit{
-														ValuePos: ic5.pos,
+														ValuePos: ic5.Pos,
 														Kind:     Number,
-														Value:    ic5.val,
+														Value:    ic5.Val,
 													},
 												},
 											})
 										default:
 											p.unexpected(p.peekNonSpace(), "enum")
 										}
-										//if p.peekNonSpace().typ != itemComma {
+										//if p.peekNonSpace().Typ != lexer.ItemComma {
 										//	break
 										//}
 										//p.nextNonSpace()
 									} else {
-										//if p.peekNonSpace().typ == itemComma {
+										//if p.peekNonSpace().Typ == lexer.ItemComma {
 										//	p.nextNonSpace()
 										//}
 										ds = append(ds, EnumValue{
 											Name: &Ident{
-												NamePos: ic.pos,
-												Name:    ic.val,
+												NamePos: ic.Pos,
+												Name:    ic.Val,
 											},
 											Value: nil,
 										})
 									}
-									if p.peekNonSpace().typ == itemComment {
+									if p.peekNonSpace().Typ == lexer.ItemComment {
 										ic := p.nextNonSpace()
 										c <- &Comment{
-											Slash: ic.pos,
-											Text:  ic.val,
+											Slash: ic.Pos,
+											Text:  ic.Val,
 										}
 									}
-									if p.peekNonSpace().typ != itemComma {
+									if p.peekNonSpace().Typ != lexer.ItemComma {
 										break
 									}
 									p.nextNonSpace()
 								}
-								p.expect(itemCloseCurly, "typedef")
-								i2 := p.expect(itemIdentifier, "typedef")
-								p.expect(itemSemicolon, "typedef")
+								p.expect(lexer.ItemCloseCurly, "typedef")
+								i2 := p.expect(lexer.ItemIdentifier, "typedef")
+								p.expect(lexer.ItemSemicolon, "typedef")
 								c <- TypeDecl{
 									Name: Ident{
-										NamePos: i2.pos,
-										Name:    i2.val,
+										NamePos: i2.Pos,
+										Name:    i2.Val,
 									},
 									Expr: EnumDecl{
 										Specs: ds,
@@ -276,14 +277,14 @@ func (p *parser) Parse() chan ast.Node {
 					}
 				}
 				//fallthrough
-			//case itemOpenParen:
+			//case lexer.ItemOpenParen:
 			//	p.backup()
 			//	c <- p.parseParenExpr()
-			case itemExtern:
+			case lexer.ItemExtern:
 				p.backup()
 				c <- p.parseExternDecl()
-			case itemSpace:
-				if strings.Contains(i.val, "\n") {
+			case lexer.ItemSpace:
+				if strings.Contains(i.Val, "\n") {
 					continue
 				}
 				fallthrough
@@ -325,25 +326,25 @@ func un(p *parser) {
 }
 
 func (p *parser) parseExternDecl() ast.Decl {
-	keyword := p.expect(itemExtern, "external declaration")
+	keyword := p.expect(lexer.ItemExtern, "external declaration")
 	next := p.peekNonSpace()
-	if next.typ == itemString && next.val == `"C"` {
+	if next.Typ == lexer.ItemString && next.Val == `"C"` {
 		p.next()
-		curly := p.expect(itemOpenCurly, "external declaration")
+		curly := p.expect(lexer.ItemOpenCurly, "external declaration")
 		return &ast.ExternDecl{
-			KeyPos: keyword.pos,
+			KeyPos: keyword.Pos,
 			Decl: &ast.CDecl{
 				Value: &ast.BasicLit{
-					ValuePos: next.pos,
+					ValuePos: next.Pos,
 					Kind:     token.STRING,
-					Value:    next.val,
+					Value:    next.Val,
 				},
-				BodyPos: curly.pos,
+				BodyPos: curly.Pos,
 			},
 		}
 	}
 	return &ast.ExternDecl{
-		KeyPos: keyword.pos,
+		KeyPos: keyword.Pos,
 		Decl:   nil,
 	}
 }
@@ -352,7 +353,7 @@ func (p *parser) parseOperand() ast.Expr {
 	/*switch p.tok {
 	case token.INT:
 		x := &BasicLit{
-			ValuePos: p.pos,
+			ValuePos: p.Pos,
 			Kind:     p.tok,
 			Value:    p.lit,
 		}
@@ -371,36 +372,36 @@ func (p *parser) parsePrimaryExpr() ast.Expr {
 }
 
 func (p *parser) parseUnaryExpr() ast.Expr {
-	switch p.peekNonSpace().typ {
-	case itemHexValue:
+	switch p.peekNonSpace().Typ {
+	case lexer.ItemHexValue:
 		number := p.next()
 		return &ast.BasicLit{
-			ValuePos: number.pos,
+			ValuePos: number.Pos,
 			Kind:     token.INT,
-			Value:    number.val,
+			Value:    number.Val,
 		}
-	case itemIdentifier:
+	case lexer.ItemIdentifier:
 		identifier := p.next()
 		return &ast.Ident{
-			NamePos: identifier.pos,
-			Name:    identifier.val,
+			NamePos: identifier.Pos,
+			Name:    identifier.Val,
 		}
-	case itemMinus:
+	case lexer.ItemMinus:
 		operator := p.next()
 		expr := p.parseUnaryExpr()
 		return &ast.UnaryExpr{
-			OpPos: operator.pos,
+			OpPos: operator.Pos,
 			Op:    token.SUB,
 			X:     expr,
 		}
-	case itemOpenParen:
+	case lexer.ItemOpenParen:
 		opening := p.next()
 		expr := p.parseExpr()
-		closing := p.expect(itemCloseParen, "parentheses expression")
+		closing := p.expect(lexer.ItemCloseParen, "parentheses expression")
 		return &ast.ParenExpr{
-			Opening: opening.pos,
+			Opening: opening.Pos,
 			Expr:    expr,
-			Closing: closing.pos,
+			Closing: closing.Pos,
 		}
 	}
 
@@ -409,12 +410,12 @@ func (p *parser) parseUnaryExpr() ast.Expr {
 	return p.parsePrimaryExpr()
 }
 
-func (p *parser) tokPrec() (item, token.Token, int) {
+func (p *parser) tokPrec() (lexer.Item, token.Token, int) {
 	tok := p.nextNonSpace()
-	switch tok.typ {
-	case itemMinus:
+	switch tok.Typ {
+	case lexer.ItemMinus:
 		return tok, token.SUB, 4
-	case itemSlash:
+	case lexer.ItemSlash:
 		return tok, token.QUO, 5
 	}
 	p.backup()
@@ -431,7 +432,7 @@ func (p *parser) parseBinaryExpr(prec1 int) ast.Expr {
 		y := p.parseBinaryExpr(oprec + 1)
 		x = &ast.BinaryExpr{
 			X:     x,
-			OpPos: op.pos,
+			OpPos: op.Pos,
 			Op:    tok,
 			Y:     y,
 		}
@@ -443,48 +444,48 @@ func (p *parser) parseExpr() ast.Expr {
 }
 
 func (p *parser) parseArgList() *ast.ArgList {
-	if p.peek().typ != itemOpenParen {
+	if p.peek().Typ != lexer.ItemOpenParen {
 		return nil
 	}
 
 	open := p.next()
 	var list []*ast.Ident
-	if p.peek().typ == itemIdentifier {
+	if p.peek().Typ == lexer.ItemIdentifier {
 		id := p.next()
 		list = append(list, &ast.Ident{
-			NamePos: id.pos,
-			Name:    id.val,
+			NamePos: id.Pos,
+			Name:    id.Val,
 		})
 
-		for p.peek().typ == itemComma {
-			id = p.expect(itemIdentifier, "macro argument list")
+		for p.peek().Typ == lexer.ItemComma {
+			id = p.expect(lexer.ItemIdentifier, "macro argument list")
 			list = append(list, &ast.Ident{
-				NamePos: id.pos,
-				Name:    id.val,
+				NamePos: id.Pos,
+				Name:    id.Val,
 			})
 		}
 	}
-	closing := p.expect(itemCloseParen, "macro argument list")
+	closing := p.expect(lexer.ItemCloseParen, "macro argument list")
 
 	return &ast.ArgList{
-		Opening: open.pos,
+		Opening: open.Pos,
 		List:    list,
-		Closing: closing.pos,
+		Closing: closing.Pos,
 	}
 }
 
 func (p *parser) parseMacroDir() ast.Dir {
-	keyword := p.expect(itemDefine, "macro definition")
-	name := p.expect(itemIdentifier, "macro definition")
+	keyword := p.expect(lexer.ItemDefine, "macro definition")
+	name := p.expect(lexer.ItemIdentifier, "macro definition")
 	args := p.parseArgList()
-	switch p.peek().typ {
-	case itemSpace, itemEOF:
-		if p.peek().val == "" || strings.Contains(p.peek().val, "\n") {
+	switch p.peek().Typ {
+	case lexer.ItemSpace, lexer.ItemEOF:
+		if p.peek().Val == "" || strings.Contains(p.peek().Val, "\n") {
 			return &ast.MacroDir{
-				DirPos: keyword.pos,
+				DirPos: keyword.Pos,
 				Name: &ast.Ident{
-					NamePos: name.pos,
-					Name:    name.val,
+					NamePos: name.Pos,
+					Name:    name.Val,
 				},
 				Args:  args,
 				Value: nil,
@@ -494,10 +495,10 @@ func (p *parser) parseMacroDir() ast.Dir {
 	default:
 		p.next()
 		return &ast.MacroDir{
-			DirPos: keyword.pos,
+			DirPos: keyword.Pos,
 			Name: &ast.Ident{
-				NamePos: name.pos,
-				Name:    name.val,
+				NamePos: name.Pos,
+				Name:    name.Val,
 			},
 			Args:  args,
 			Value: p.parseExpr(),
@@ -505,14 +506,14 @@ func (p *parser) parseMacroDir() ast.Dir {
 	}
 	/*
 		p.next()
-		switch p.peek().typ {
-		case itemHexValue:
+		switch p.peek().Typ {
+		case lexer.ItemHexValue:
 			//i2 := p.nextNonSpace()
 			return &MacroDir{
-				DirPos: keyword.pos,
+				DirPos: keyword.Pos,
 				Name: &Ident{
-					NamePos: name.pos,
-					Name:    name.val,
+					NamePos: name.Pos,
+					Name:    name.Val,
 				},
 				Args:  args,
 				Value: p.parseExpr(),
@@ -520,43 +521,43 @@ func (p *parser) parseMacroDir() ast.Dir {
 		default:
 			i1 := p.next()
 			i2 := p.peek()
-			//fmt.Printf("%s\n", i1.typ)
-			//fmt.Printf("%s\n", i2.typ)
-			for i2.typ != itemEOF && i2.typ != itemError && i2.typ != itemSpace {
+			//fmt.Printf("%s\n", i1.Typ)
+			//fmt.Printf("%s\n", i2.Typ)
+			for i2.Typ != lexer.ItemEOF && i2.Typ != lexer.ItemError && i2.Typ != lexer.ItemSpace {
 				i1 = p.next()
 				i2 = p.peek()
 			}
 			p.backup()
 			return &BadDir{
-				From: keyword.pos,
-				To:   token.Pos(int(i1.pos) + len(i1.val)),
+				From: keyword.Pos,
+				To:   token.Pos(int(i1.Pos) + len(i1.Val)),
 			}
-			//p.errorf("unexpected %s", p.peek().typ)
+			//p.errorf("unexpected %s", p.peek().Typ)
 		}
 	}*/
 }
 
 func (p *parser) parseParenExpr() ast.Expr {
-	opening := p.expect(itemOpenParen, "parentheses expression")
+	opening := p.expect(lexer.ItemOpenParen, "parentheses expression")
 	var expr ast.Expr
-	if p.peek().typ != itemCloseParen {
+	if p.peek().Typ != lexer.ItemCloseParen {
 		expr = p.parseExpr()
 	}
-	closing := p.expect(itemCloseParen, "parentheses expression")
+	closing := p.expect(lexer.ItemCloseParen, "parentheses expression")
 	return &ast.ParenExpr{
-		Opening: opening.pos,
+		Opening: opening.Pos,
 		Expr:    expr,
-		Closing: closing.pos,
+		Closing: closing.Pos,
 	}
 }
 
-func (p *parser) next() item {
+func (p *parser) next() lexer.Item {
 	if p.peekCount > 0 {
 		p.peekCount--
 	} else {
-		p.token[0] = p.lex.nextItem()
+		p.token[0] = p.lex.NextItem()
 	}
-	p.pos, p.tok, p.lit = p.token[p.peekCount].pos, token.INT, p.token[p.peekCount].val
+	p.pos, p.tok, p.lit = p.token[p.peekCount].Pos, token.INT, p.token[p.peekCount].Val
 	return p.token[p.peekCount]
 }
 
@@ -564,29 +565,29 @@ func (p *parser) backup() {
 	p.peekCount = 1
 }
 
-func (p *parser) peek() item {
+func (p *parser) peek() lexer.Item {
 	if p.peekCount > 0 {
 		return p.token[p.peekCount-1]
 	}
 	p.peekCount = 1
-	p.token[0] = p.lex.nextItem()
+	p.token[0] = p.lex.NextItem()
 	return p.token[0]
 }
 
-func (p *parser) nextNonSpace() (token item) {
+func (p *parser) nextNonSpace() (token lexer.Item) {
 	for {
 		token = p.next()
-		if token.typ != itemSpace {
+		if token.Typ != lexer.ItemSpace {
 			break
 		}
 	}
 	return token
 }
 
-func (p *parser) peekNonSpace() (token item) {
+func (p *parser) peekNonSpace() (token lexer.Item) {
 	for {
 		token = p.next()
-		if token.typ != itemSpace {
+		if token.Typ != lexer.ItemSpace {
 			break
 		}
 	}
@@ -595,7 +596,7 @@ func (p *parser) peekNonSpace() (token item) {
 }
 
 func (p *parser) errorf(format string, args ...interface{}) {
-	format = fmt.Sprintf("cgen: %s:%d: %s", p.name, p.token[0].line, format)
+	format = fmt.Sprintf("cgen: %s:%d: %s", p.name, p.token[0].Line, format)
 	go func() {
 		for {
 			p.error <- fmt.Errorf(format, args...)
@@ -604,23 +605,23 @@ func (p *parser) errorf(format string, args ...interface{}) {
 	panic(fmt.Errorf(format, args...))
 }
 
-func (p *parser) expect(expected itemType, context string) item {
+func (p *parser) expect(expected lexer.ItemType, context string) lexer.Item {
 	token := p.nextNonSpace()
-	if token.typ != expected {
+	if token.Typ != expected {
 		p.unexpected(token, context)
 	}
 	return token
 }
 
-func (p *parser) expectOneOf(expected1, expected2 itemType, context string) item {
+func (p *parser) expectOneOf(expected1, expected2 lexer.ItemType, context string) lexer.Item {
 	token := p.nextNonSpace()
-	if token.typ != expected1 && token.typ != expected2 {
+	if token.Typ != expected1 && token.Typ != expected2 {
 		p.unexpected(token, context)
 	}
 	return token
 }
 
-func (p *parser) unexpected(token item, context string) {
+func (p *parser) unexpected(token lexer.Item, context string) {
 	p.errorf("unexpected %s in %s", token, context)
 }
 
