@@ -45,36 +45,36 @@ func (p *parser) Nodes() []ast.Node {
 }
 
 func (p *parser) Parse() chan ast.Node {
-	var m = map[lexer.ItemType]func() ast.Node{
-		lexer.ItemEndIf:        func() ast.Node { return &ast.EndIfDir{DirPos: p.next().Pos} },
-		lexer.ItemElseDir:      func() ast.Node { return &ast.ElseDir{DirPos: p.next().Pos} },
-		lexer.ItemDefine:       func() ast.Node { return p.parseMacroDir() },
-		lexer.ItemInclude:      func() ast.Node { return p.parseIncludeDir() },
-		lexer.ItemIfDefined:    func() ast.Node { return p.parseIfDefDir(ast.DEFINED) },
-		lexer.ItemIfNotDefined: func() ast.Node { return p.parseIfDefDir(ast.NOT_DEFINED) },
-		lexer.ItemComment: func() ast.Node {
+	var m = map[token.Token]func() ast.Node{
+		token.ENDIF:   func() ast.Node { return &ast.EndIfDir{DirPos: p.next().Pos} },
+		token.ELSE:    func() ast.Node { return &ast.ElseDir{DirPos: p.next().Pos} },
+		token.DEFINE:  func() ast.Node { return p.parseMacroDir() },
+		token.INCLUDE: func() ast.Node { return p.parseIncludeDir() },
+		token.IFDEF:   func() ast.Node { return p.parseIfDefDir(ast.DEFINED) },
+		token.IFNDEF:  func() ast.Node { return p.parseIfDefDir(ast.NOT_DEFINED) },
+		token.COMMENT: func() ast.Node {
 			comment := p.next()
 			return &ast.Comment{
 				Slash: comment.Pos,
 				Text:  comment.Val,
 			}
 		},
-		lexer.ItemExtern: func() ast.Node { return p.parseExternDecl() },
+		token.EXTERN: func() ast.Node { return p.parseExternDecl() },
 	}
 	c := make(chan ast.Node)
 	go func() {
 		defer close(c)
 		for {
 			i := p.peek()
-			f, ok := m[i.Typ]
+			f, ok := m[i.Tok]
 			if ok {
 				c <- f()
 				continue
 			}
-			switch i.Typ {
-			case lexer.ItemEOF:
+			switch i.Tok {
+			case token.EOF:
 				return
-			case lexer.ItemError:
+			case token.ILLEGAL:
 				p.errorf(i.Val)
 			//case lexer.ItemIdentifier:
 			//if i.Val == "typedef" {
@@ -138,14 +138,14 @@ func (p *parser) parseOperand() ast.Expr {
 
 func (p *parser) tokPrec() (lexer.Item, token.Token, int) {
 	tok := p.nextNonSpace()
-	switch tok.Typ {
-	case lexer.ItemMinus:
+	switch tok.Tok {
+	case token.SUB:
 		return tok, token.SUB, 4
-	case lexer.ItemSlash:
+	case token.QUO:
 		return tok, token.QUO, 5
 	}
 	p.backup()
-	return tok, token.ILLEGAL_TOKEN, 0
+	return tok, token.ILLEGAL, 0
 }
 
 func (p *parser) next() lexer.Item {
@@ -171,25 +171,26 @@ func (p *parser) peek() lexer.Item {
 	return p.token[0]
 }
 
-func (p *parser) nextNonSpace() (token lexer.Item) {
+func (p *parser) nextNonSpace() lexer.Item {
+	var t lexer.Item
 	for {
-		token = p.next()
-		if token.Typ != lexer.ItemSpace {
+		t = p.next()
+		if t.Tok != token.WHITESPACE {
 			break
 		}
 	}
-	return token
+	return t
 }
 
-func (p *parser) peekNonSpace() (token lexer.Item) {
+func (p *parser) peekNonSpace() (t lexer.Item) {
 	for {
-		token = p.next()
-		if token.Typ != lexer.ItemSpace {
+		t = p.next()
+		if t.Tok != token.WHITESPACE {
 			break
 		}
 	}
 	p.backup()
-	return token
+	return t
 }
 
 func (p *parser) errorf(format string, args ...interface{}) {
@@ -202,17 +203,17 @@ func (p *parser) errorf(format string, args ...interface{}) {
 	panic(fmt.Errorf(format, args...))
 }
 
-func (p *parser) expect(expected lexer.ItemType, context string) lexer.Item {
+func (p *parser) expect(expected token.Token, context string) lexer.Item {
 	token := p.nextNonSpace()
-	if token.Typ != expected {
+	if token.Tok != expected {
 		p.unexpected(token, context)
 	}
 	return token
 }
 
-func (p *parser) expectOneOf(expected1, expected2 lexer.ItemType, context string) lexer.Item {
+func (p *parser) expectOneOf(expected1, expected2 token.Token, context string) lexer.Item {
 	token := p.nextNonSpace()
-	if token.Typ != expected1 && token.Typ != expected2 {
+	if token.Tok != expected1 && token.Tok != expected2 {
 		p.unexpected(token, context)
 	}
 	return token

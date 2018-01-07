@@ -2,16 +2,15 @@ package parser
 
 import (
 	"github.com/SHyx0rmZ/cgen/ast"
-	"github.com/SHyx0rmZ/cgen/lexer"
 	"github.com/SHyx0rmZ/cgen/token"
 )
 
 func (p *parser) parseExternDecl() ast.Decl {
-	keyword := p.expect(lexer.ItemExtern, "external declaration")
+	keyword := p.expect(token.EXTERN, "external declaration")
 	next := p.peekNonSpace()
-	if next.Typ == lexer.ItemString && next.Val == `"C"` {
+	if next.Tok == token.STRING && next.Val == `"C"` {
 		p.next()
-		curly := p.expect(lexer.ItemOpenCurly, "external declaration")
+		curly := p.expect(token.LBRACE, "external declaration")
 		return &ast.ExternDecl{
 			KeyPos: keyword.Pos,
 			Decl: &ast.CDecl{

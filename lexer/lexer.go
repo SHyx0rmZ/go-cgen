@@ -66,10 +66,8 @@ func (l *lexer) backup() {
 	}
 }
 
-func (l *lexer) emit(t ItemType) {
-	l.items <- Item{t, l.start, l.input[l.start:l.pos], l.line}
-	switch t {
-	}
+func (l *lexer) emit(t token.Token) {
+	l.items <- Item{l.start, l.input[l.start:l.pos], t, l.line}
 	l.start = l.pos
 }
 
@@ -92,7 +90,7 @@ func (l *lexer) acceptRun(valid string) {
 }
 
 func (l *lexer) errorf(format string, args ...interface{}) stateFn {
-	l.items <- Item{ItemError, l.start, fmt.Sprintf(format, args...), l.line}
+	l.items <- Item{l.start, fmt.Sprintf(format, args...), token.ILLEGAL, l.line}
 	return nil
 }
 
@@ -120,7 +118,7 @@ func lexLineStart(l *lexer) stateFn {
 		return lexMultilineComment
 	case l.accept(" \n\t"):
 		l.acceptRun(" \n\t")
-		l.emit(ItemSpace)
+		l.emit(token.WHITESPACE)
 		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#ifndef"):
 		return lexIfNotDefined
@@ -134,29 +132,29 @@ func lexLineStart(l *lexer) stateFn {
 		return lexExtern
 	case strings.HasPrefix(l.input[l.pos:], "#else"):
 		l.pos += token.Pos(len("#else"))
-		l.emit(ItemElseDir)
+		l.emit(token.ELSE)
 		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#endif"):
 		l.pos += token.Pos(len("#endif"))
-		l.emit(ItemEndIf)
+		l.emit(token.ENDIF)
 		return lexLineStart
 	case l.accept(groupDigits):
 		return lexHexValue
 	case l.peek() == '{':
 		l.next()
-		l.emit(ItemOpenCurly)
+		l.emit(token.LBRACE)
 		return lexLineStart
 	case l.peek() == '}':
 		l.next()
-		l.emit(ItemCloseCurly)
+		l.emit(token.RBRACE)
 		return lexLineStart
 	case l.peek() == '(':
 		l.next()
-		l.emit(ItemOpenParen)
+		l.emit(token.LPAREN)
 		return lexLineStart
 	case l.peek() == ')':
 		l.next()
-		l.emit(ItemCloseParen)
+		l.emit(token.RPAREN)
 		return lexLineStart
 	case l.peek() == '\\':
 		l.next()
@@ -165,46 +163,46 @@ func lexLineStart(l *lexer) stateFn {
 	case l.peek() == '|':
 		l.next()
 		if l.accept("|") {
-			l.emit(ItemLogicalOr)
+			l.emit(token.LOR)
 			return lexLineStart
 		}
-		l.emit(ItemBitwiseOr)
+		l.emit(token.OR)
 		return lexLineStart
 	case l.peek() == ';':
 		l.next()
-		l.emit(ItemSemicolon)
+		l.emit(token.SEMICOLON)
 		return lexLineStart
 	case l.peek() == '*':
 		l.next()
-		l.emit(ItemStar)
+		l.emit(token.MUL)
 		return lexLineStart
 	case l.peek() == ',':
 		l.next()
-		l.emit(ItemComma)
+		l.emit(token.COMMA)
 		return lexLineStart
 	case l.peek() == '=':
 		l.next()
-		l.emit(ItemEqualSign)
+		l.emit(token.ASSIGN)
 		return lexLineStart
 	case l.peek() == '&':
 		l.next()
 		if l.accept("&") {
-			l.emit(ItemLogicalAnd)
+			l.emit(token.LAND)
 			return lexLineStart
 		}
-		l.emit(ItemBitwiseAnd)
+		l.emit(token.AND)
 		return lexLineStart
 	case l.peek() == '-':
 		l.next()
 		if l.accept("-") {
-			l.emit(ItemDecrement)
+			l.emit(token.DEC)
 			return lexLineStart
 		}
-		l.emit(ItemMinus)
+		l.emit(token.SUB)
 		return lexLineStart
 	case l.peek() == '/':
 		l.next()
-		l.emit(ItemSlash)
+		l.emit(token.QUO)
 		return lexLineStart
 	case l.peek() == '"':
 		return lexString
@@ -213,7 +211,7 @@ func lexLineStart(l *lexer) stateFn {
 			return lexIdentifier
 		}
 		if int(l.pos) == len(l.input) {
-			l.emit(ItemEOF)
+			l.emit(token.EOF)
 			return nil
 		}
 		return l.errorf("unknown: %.30q...", l.input[l.pos:])
@@ -232,7 +230,7 @@ func lexString(l *lexer) stateFn {
 		n := l.peek()
 		if n == '"' {
 			l.next()
-			l.emit(ItemString)
+			l.emit(token.STRING)
 			return lexLineStart
 		}
 		if n == '\\' {
@@ -245,9 +243,9 @@ func lexString(l *lexer) stateFn {
 
 func lexExtern(l *lexer) stateFn {
 	l.pos += token.Pos(len("extern"))
-	l.emit(ItemExtern)
+	l.emit(token.EXTERN)
 	l.acceptRun(" ")
-	l.emit(ItemSpace)
+	l.emit(token.WHITESPACE)
 	//if strings.HasPrefix(l.input[l.Pos:], `"C"`) {
 	//	l.Pos += token.Pos(len(`"C"`))
 	//	l.emit(ItemExternC)
@@ -258,21 +256,21 @@ func lexExtern(l *lexer) stateFn {
 
 func lexInclude(l *lexer) stateFn {
 	l.pos += token.Pos(len("#include"))
-	l.emit(ItemInclude)
+	l.emit(token.INCLUDE)
 	l.acceptRun(" ")
-	l.emit(ItemSpace)
+	l.emit(token.WHITESPACE)
 	switch l.next() {
 	case '"':
 		l.acceptRun(groupLower + groupUpper + groupDigits + "_-/\\.")
 		if l.accept(`"`) {
-			l.emit(ItemIncludePath)
+			l.emit(token.INCLUDE_PATH)
 			return lexLineStart
 		}
 		return l.errorf("expected closing quotes")
 	case '<':
 		l.acceptRun(groupLower + groupUpper + groupDigits + "_-/\\.")
 		if l.accept(">") {
-			l.emit(ItemIncludePathSystem)
+			l.emit(token.INCLUDE_PATH)
 			return lexLineStart
 		}
 		return l.errorf("expected closing angle bracket")
@@ -284,14 +282,14 @@ func lexInclude(l *lexer) stateFn {
 func lexHexValue(l *lexer) stateFn {
 	l.acceptRun("x0123456789abcdefABCDEF")
 	l.accept("u")
-	l.emit(ItemHexValue)
+	l.emit(token.INT)
 	return lexLineStart
 }
 
 func lexIdentifier(l *lexer) stateFn {
 	//if l.accept("_" + groupLower + groupUpper) {
 	l.acceptRun("_" + groupLower + groupUpper + groupDigits)
-	l.emit(ItemIdentifier)
+	l.emit(token.IDENT)
 	return lexLineStart
 	//}
 	//return l.errorf("expected identifier")
@@ -299,7 +297,7 @@ func lexIdentifier(l *lexer) stateFn {
 
 func lexDefine(l *lexer) stateFn {
 	l.pos += token.Pos(len("#define"))
-	l.emit(ItemDefine)
+	l.emit(token.DEFINE)
 	return lexLineStart
 }
 
@@ -320,13 +318,13 @@ func lexDefine(l *lexer) stateFn {
 
 func lexIfDefined(l *lexer) stateFn {
 	l.pos += token.Pos(len("#ifdef"))
-	l.emit(ItemIfDefined)
+	l.emit(token.IFDEF)
 	return lexLineStart
 }
 
 func lexIfNotDefined(l *lexer) stateFn {
 	l.pos += token.Pos(len("#ifndef"))
-	l.emit(ItemIfNotDefined)
+	l.emit(token.IFNDEF)
 	return lexLineStart
 }
 
@@ -336,14 +334,14 @@ func lexMultilineComment(l *lexer) stateFn {
 		n := l.next()
 		for n != '*' {
 			if n == eof {
-				l.emit(ItemEOF)
+				l.emit(token.EOF)
 				return nil
 			}
 			n = l.next()
 		}
 		if l.peek() == '/' {
 			l.next()
-			l.emit(ItemComment)
+			l.emit(token.COMMENT)
 			break
 		}
 	}

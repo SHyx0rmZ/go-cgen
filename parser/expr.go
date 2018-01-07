@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/SHyx0rmZ/cgen/ast"
-	"github.com/SHyx0rmZ/cgen/lexer"
 	"github.com/SHyx0rmZ/cgen/token"
 )
 
@@ -14,21 +13,21 @@ func (p *parser) parsePrimaryExpr() ast.Expr {
 }
 
 func (p *parser) parseUnaryExpr() ast.Expr {
-	switch p.peekNonSpace().Typ {
-	case lexer.ItemHexValue:
+	switch p.peekNonSpace().Tok {
+	case token.INT:
 		number := p.next()
 		return &ast.BasicLit{
 			ValuePos: number.Pos,
 			Kind:     token.INT,
 			Value:    number.Val,
 		}
-	case lexer.ItemIdentifier:
+	case token.IDENT:
 		identifier := p.next()
 		return &ast.Ident{
 			NamePos: identifier.Pos,
 			Name:    identifier.Val,
 		}
-	case lexer.ItemMinus:
+	case token.SUB:
 		operator := p.next()
 		expr := p.parseUnaryExpr()
 		return &ast.UnaryExpr{
@@ -36,10 +35,10 @@ func (p *parser) parseUnaryExpr() ast.Expr {
 			Op:    token.SUB,
 			X:     expr,
 		}
-	case lexer.ItemOpenParen:
+	case token.LPAREN:
 		opening := p.next()
 		expr := p.parseExpr()
-		closing := p.expect(lexer.ItemCloseParen, "parentheses expression")
+		closing := p.expect(token.RPAREN, "parentheses expression")
 		return &ast.ParenExpr{
 			Opening: opening.Pos,
 			Expr:    expr,
@@ -74,12 +73,12 @@ func (p *parser) parseExpr() ast.Expr {
 }
 
 func (p *parser) parseParenExpr() ast.Expr {
-	opening := p.expect(lexer.ItemOpenParen, "parentheses expression")
+	opening := p.expect(token.LPAREN, "parentheses expression")
 	var expr ast.Expr
-	if p.peek().Typ != lexer.ItemCloseParen {
+	if p.peek().Tok != token.RPAREN {
 		expr = p.parseExpr()
 	}
-	closing := p.expect(lexer.ItemCloseParen, "parentheses expression")
+	closing := p.expect(token.RPAREN, "parentheses expression")
 	return &ast.ParenExpr{
 		Opening: opening.Pos,
 		Expr:    expr,

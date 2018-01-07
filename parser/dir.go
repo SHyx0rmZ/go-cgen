@@ -2,33 +2,33 @@ package parser
 
 import (
 	"github.com/SHyx0rmZ/cgen/ast"
-	"github.com/SHyx0rmZ/cgen/lexer"
+	"github.com/SHyx0rmZ/cgen/token"
 	"strings"
 )
 
 func (p *parser) parseArgList() *ast.ArgList {
-	if p.peek().Typ != lexer.ItemOpenParen {
+	if p.peek().Tok != token.LPAREN {
 		return nil
 	}
 
 	open := p.next()
 	var list []*ast.Ident
-	if p.peek().Typ == lexer.ItemIdentifier {
+	if p.peek().Tok == token.IDENT {
 		id := p.next()
 		list = append(list, &ast.Ident{
 			NamePos: id.Pos,
 			Name:    id.Val,
 		})
 
-		for p.peek().Typ == lexer.ItemComma {
-			id = p.expect(lexer.ItemIdentifier, "macro argument list")
+		for p.peek().Tok == token.COMMA {
+			id = p.expect(token.IDENT, "macro argument list")
 			list = append(list, &ast.Ident{
 				NamePos: id.Pos,
 				Name:    id.Val,
 			})
 		}
 	}
-	closing := p.expect(lexer.ItemCloseParen, "macro argument list")
+	closing := p.expect(token.RPAREN, "macro argument list")
 
 	return &ast.ArgList{
 		Opening: open.Pos,
@@ -38,11 +38,11 @@ func (p *parser) parseArgList() *ast.ArgList {
 }
 
 func (p *parser) parseMacroDir() ast.Dir {
-	keyword := p.expect(lexer.ItemDefine, "macro definition")
-	name := p.expect(lexer.ItemIdentifier, "macro definition")
+	keyword := p.expect(token.DEFINE, "macro definition")
+	name := p.expect(token.IDENT, "macro definition")
 	args := p.parseArgList()
-	switch p.peek().Typ {
-	case lexer.ItemSpace, lexer.ItemEOF:
+	switch p.peek().Tok {
+	case token.WHITESPACE, token.EOF:
 		if p.peek().Val == "" || strings.Contains(p.peek().Val, "\n") {
 			return &ast.MacroDir{
 				DirPos: keyword.Pos,
@@ -70,8 +70,8 @@ func (p *parser) parseMacroDir() ast.Dir {
 }
 
 func (p *parser) parseIncludeDir() ast.Dir {
-	keyword := p.expect(lexer.ItemInclude, "include directive")
-	path := p.expectOneOf(lexer.ItemIncludePath, lexer.ItemIncludePathSystem, "include directive")
+	keyword := p.expect(token.INCLUDE, "include directive")
+	path := p.expect(token.INCLUDE_PATH, "include directive")
 	return &ast.IncludeDir{
 		DirPos:  keyword.Pos,
 		PathPos: path.Pos,
@@ -80,8 +80,8 @@ func (p *parser) parseIncludeDir() ast.Dir {
 }
 
 func (p *parser) parseIfDefDir(cond ast.IfDefCond) ast.Dir {
-	keyword := p.expectOneOf(lexer.ItemIfDefined, lexer.ItemIfNotDefined, "conditional directive")
-	identifier := p.expect(lexer.ItemIdentifier, "conditional directive")
+	keyword := p.expectOneOf(token.IFDEF, token.IFNDEF, "conditional directive")
+	identifier := p.expect(token.IDENT, "conditional directive")
 	return &ast.IfDefDir{
 		DirPos: keyword.Pos,
 		Cond:   cond,
