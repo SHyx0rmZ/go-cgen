@@ -1,19 +1,46 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
+	goast "go/ast"
 	"reflect"
 	"testing"
 
-	"bytes"
 	"github.com/SHyx0rmZ/cgen/ast"
-	goast "go/ast"
+	"github.com/SHyx0rmZ/cgen/token"
 )
 
-func TestParser_Parse(t *testing.T) {
-	var tests []struct {
+func TestParser_ParseDecl(t *testing.T) {
+	tests := []struct {
 		Input string
 		Value []ast.Node
+	}{
+		{
+			Input: "extern",
+			Value: []ast.Node{
+				&ast.ExternDecl{
+					KeyPos: 0,
+					Decl:   nil,
+				},
+			},
+		},
+		{
+			Input: `extern "C" {`,
+			Value: []ast.Node{
+				&ast.ExternDecl{
+					KeyPos: 0,
+					Decl: &ast.CDecl{
+						Value: &ast.BasicLit{
+							ValuePos: 7,
+							Kind:     token.STRING,
+							Value:    `"C"`,
+						},
+						BodyPos: 11,
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {

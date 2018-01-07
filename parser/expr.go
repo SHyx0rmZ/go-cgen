@@ -27,23 +27,26 @@ func (p *parser) parseUnaryExpr() ast.Expr {
 			NamePos: identifier.Pos,
 			Name:    identifier.Val,
 		}
+	//case token.ADD, token.SUB, token.AND, token.OR, token.XOR:
 	case token.SUB:
 		operator := p.next()
 		expr := p.parseUnaryExpr()
 		return &ast.UnaryExpr{
 			OpPos: operator.Pos,
-			Op:    token.SUB,
+			Op:    operator.Tok,
 			X:     expr,
 		}
 	case token.LPAREN:
-		opening := p.next()
-		expr := p.parseExpr()
-		closing := p.expect(token.RPAREN, "parentheses expression")
-		return &ast.ParenExpr{
-			Opening: opening.Pos,
-			Expr:    expr,
-			Closing: closing.Pos,
-		}
+		//opening := p.next()
+		//expr := p.parseExpr()
+		//fmt.Printf("%#v\n", expr)
+		//closing := p.expect(token.RPAREN, "parentheses expression")
+		//return &ast.ParenExpr{
+		//	Opening: opening.Pos,
+		//	Expr:    expr,
+		//	Closing: closing.Pos,
+		//}
+		return p.parseParenExpr()
 	}
 
 	fmt.Printf("B %s\n", p.peekNonSpace())
@@ -54,15 +57,18 @@ func (p *parser) parseUnaryExpr() ast.Expr {
 func (p *parser) parseBinaryExpr(prec1 int) ast.Expr {
 	x := p.parseUnaryExpr()
 	for {
-		op, tok, oprec := p.tokPrec()
+		op := p.nextNonSpace()
+		oprec := op.Tok.Precedence()
+		p.backup()
 		if oprec < prec1 {
 			return x
 		}
+		p.next()
 		y := p.parseBinaryExpr(oprec + 1)
 		x = &ast.BinaryExpr{
 			X:     x,
 			OpPos: op.Pos,
-			Op:    tok,
+			Op:    op.Tok,
 			Y:     y,
 		}
 	}
