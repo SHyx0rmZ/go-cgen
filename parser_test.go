@@ -170,8 +170,14 @@ func TestParser_Parse(t *testing.T) {
 				},
 			},
 		},
-		// #endif
-		// extern "C" {
+		{
+			"#else",
+			[]ast.Node{
+				&ast.ElseDir{
+					DirPos: 0,
+				},
+			},
+		},
 		{
 			"1",
 			[]ast.Node{

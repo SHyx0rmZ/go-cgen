@@ -58,6 +58,10 @@ func (p *parser) Parse() chan ast.Node {
 				c <- &ast.EndIfDir{
 					DirPos: i.pos,
 				}
+			case itemElseDir:
+				c <- &ast.ElseDir{
+					DirPos: i.pos,
+				}
 			case itemDefine:
 				p.backup()
 				c <- p.parseMacroDir()

@@ -155,6 +155,10 @@ type (
 		Name   *Ident
 	}
 
+	ElseDir struct {
+		DirPos token.Pos
+	}
+
 	EndIfDir struct {
 		DirPos token.Pos
 	}
@@ -164,6 +168,7 @@ func (d *BadDir) Pos() token.Pos     { return d.From }
 func (d *MacroDir) Pos() token.Pos   { return d.Name.Pos() }
 func (d *IncludeDir) Pos() token.Pos { return d.DirPos }
 func (d *IfDefDir) Pos() token.Pos   { return d.DirPos }
+func (d *ElseDir) Pos() token.Pos    { return d.DirPos }
 func (d *EndIfDir) Pos() token.Pos   { return d.DirPos }
 
 func (d *BadDir) End() token.Pos { return d.To }
@@ -175,12 +180,14 @@ func (d *MacroDir) End() token.Pos {
 }
 func (d *IncludeDir) End() token.Pos { return token.Pos(int(d.PathPos) + len(d.Path)) }
 func (d *IfDefDir) End() token.Pos   { return d.Name.End() }
+func (d *ElseDir) End() token.Pos    { return d.DirPos + 5 }
 func (d *EndIfDir) End() token.Pos   { return d.DirPos + 6 }
 
 func (*BadDir) dirNode()     {}
 func (*MacroDir) dirNode()   {}
 func (*IncludeDir) dirNode() {}
 func (*IfDefDir) dirNode()   {}
+func (*ElseDir) dirNode()    {}
 func (*EndIfDir) dirNode()   {}
 
 // ----------------------------------------------------------------------------

@@ -33,6 +33,7 @@ const (
 	itemIfNotDefined
 	itemIfDefined
 	itemDefine
+	itemElseDir
 	itemHexValue
 	itemInclude
 	itemExternC
@@ -120,6 +121,8 @@ func (t itemType) String() string {
 		return "itemSlash"
 	case itemString:
 		return "itemString"
+	case itemElseDir:
+		return "itemElseDir"
 	default:
 		return "itemUnknown"
 	}

@@ -128,6 +128,10 @@ func lexLineStart(l *lexer) stateFn {
 		return lexInclude
 	case strings.HasPrefix(l.input[l.pos:], "extern"):
 		return lexExtern
+	case strings.HasPrefix(l.input[l.pos:], "#else"):
+		l.pos += token.Pos(len("#else"))
+		l.emit(itemElseDir)
+		return lexLineStart
 	case strings.HasPrefix(l.input[l.pos:], "#endif"):
 		l.pos += token.Pos(len("#endif"))
 		l.emit(itemEndIf)
